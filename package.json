@@ -1,0 +1,16 @@
+{
+  "name": "crowd",
+  "version": "1.0.0",
+  "description": "A location-based ephemeral messaging platform with mobile app and server",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter mobile start\"",
+    "dev:server": "pnpm --filter server dev",
+    "dev:mobile": "pnpm --filter mobile start",
+    "server:view:db": "pnpm --filter server view:db"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.9.3"
+  }
+}

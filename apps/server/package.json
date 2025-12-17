@@ -1,0 +1,28 @@
+{
+  "name": "@app/server",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "generate": "drizzle-kit generate",
+    "migrate": "drizzle-kit migrate",
+    "view:db": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@repo/shared": "workspace:*",
+    "drizzle-orm": "^0.45.1",
+    "fastify": "^4.26.2",
+    "pg": "^8.11.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "@types/pg": "^8.11.6",
+    "drizzle-kit": "^0.31.8",
+    "pino": "^9.14.0",
+    "tsx": "^4.7.3",
+    "typescript": "^5.9.3"
+  }
+}
