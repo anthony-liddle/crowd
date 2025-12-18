@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { PostMessageSchema, QueryFeedSchema } from '@repo/shared';
-import { db } from '../db';
-import { messages } from '../db/schema';
+import { db } from '../db/index.js';
+import { messages } from '../db/schema.js';
 import { sql, desc, gt, and } from 'drizzle-orm';
 
 export async function messageRoutes(server: FastifyInstance) {
