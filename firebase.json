@@ -3,6 +3,9 @@
     {
       "source": "apps/server",
       "codebase": "default",
+      "predeploy": [
+        "pnpm --filter @app/server build"
+      ],
       "ignore": [
         "node_modules",
         ".git",
