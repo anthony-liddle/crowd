@@ -10,8 +10,8 @@ import { Message, CreateMessagePayload } from '@/types/message';
 // Dynamic base URL configuration for physical device testing
 const origin = Constants.expoConfig?.hostUri?.split(':')[0];
 const baseUrl = origin
-  ? `http://${origin}:3000`
-  : 'http://localhost:3000';
+  ? `http://${origin}:8080`
+  : 'http://localhost:8080';
 
 api.setBaseUrl(baseUrl);
 console.log('API Base URL set to:', baseUrl);
