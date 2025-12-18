@@ -1,6 +1,6 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
-import { messageRoutes } from './routes/messages';
+import { messageRoutes } from './routes/messages.js';
 
 /**
  * Fastify instance as a singleton-scoped variable.

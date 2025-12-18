@@ -1,5 +1,5 @@
 import { onRequest } from 'firebase-functions/v2/https';
-import { server } from './app';
+import { server } from './app.js';
 
 /**
  * Firebase Function entrypoint.
