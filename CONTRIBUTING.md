@@ -75,7 +75,7 @@ crowd/
 The project uses environment variables for configuration. See `.env.example` for required variables:
 
 - `DATABASE_URL` - PostgreSQL connection string
-- `PORT` - Server port (default: 3000)
+- `PORT` - Server port (default: 8080)
 - `HOST` - Server host (default: 0.0.0.0)
 - `CORS_ORIGIN` - CORS origin setting (default: *)
 

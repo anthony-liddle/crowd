@@ -1,0 +1,29 @@
+{
+  "functions": [
+    {
+      "source": "apps/server",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firestore-debug.log",
+        "ui-debug.log",
+        "../../apps/mobile",
+        "../../docker-compose.yml"
+      ]
+    }
+  ],
+  "emulators": {
+    "functions": {
+      "port": 5001
+    },
+    "ui": {
+      "enabled": true
+    },
+    "logging": {
+      "host": "localhost",
+      "port": 4500
+    }
+  }
+}

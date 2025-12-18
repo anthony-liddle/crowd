@@ -1,6 +1,6 @@
 import { PostMessageDto, QueryFeedDto, MessageDto, PostMessageSchema, QueryFeedSchema } from '@repo/shared';
 
-const BASE_URL = 'http://localhost:3000'; // Default for local dev
+const BASE_URL = 'http://localhost:8080'; // Default for local dev
 
 class ApiClient {
   private baseUrl: string;
