@@ -28,7 +28,7 @@ export async function messageRoutes(server: FastifyInstance) {
     return { id: newMessage.id };
   });
 
-  server.get('/messages', async (request, _reply) => {
+  server.get('/messages/feed', async (request, _reply) => {
     const query = request.query as unknown;
     const parsed = QueryFeedSchema.parse(query);
 
