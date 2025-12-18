@@ -1,0 +1,11 @@
+node_modules
+.git
+.DS_Store
+apps/mobile
+dist
+build
+.firebase
+firebase.json
+.firebaserc
+.github
+*.log

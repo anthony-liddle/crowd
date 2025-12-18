@@ -123,6 +123,46 @@ See `apps/mobile/PROJECT_STRUCTURE.md` and `apps/mobile/README.md` for detailed 
 - The mobile app currently uses a mock API in development. Update the API endpoint in `apps/mobile/src/services/api.ts` to connect to the real server.
 - CORS is set to `*` for development. Update this in production in `apps/server/src/index.ts`.
 
+## Deployment (Fly.io)
+
+The backend API is deployed as a Docker container on Fly.io.
+
+### Prerequisites
+
+1. Install Fly CLI:
+   ```bash
+   brew install superfly/tap/flyctl
+   ```
+
+2. Login to Fly.io:
+   ```bash
+   fly auth login
+   ```
+
+### First Time Setup
+
+1. Launch the app (this will use the existing `fly.toml` and `Dockerfile`):
+   ```bash
+   fly launch
+   ```
+
+2. Add your database connection string as a secret:
+   ```bash
+   fly secrets set DATABASE_URL="your-postgres-url"
+   ```
+
+### Deploying Updates
+
+To deploy new changes, simply run from the root directory:
+
+```bash
+fly deploy
+```
+
+### Why Fly.io?
+
+Fly.io is used for hosting the Dockerized Fastify server. It provides excellent support for monorepos by allowing us to build from the root directory, ensuring all workspace dependencies are correctly resolved.
+
 ## License
 
 MIT
