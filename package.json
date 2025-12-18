@@ -5,7 +5,6 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter mobile start\"",
-    "build": "pnpm -r build",
     "dev:server": "pnpm --filter server dev",
     "dev:mobile": "pnpm --filter mobile start",
     "server:view:db": "pnpm --filter server view:db"

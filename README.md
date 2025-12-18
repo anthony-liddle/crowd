@@ -123,46 +123,6 @@ See `apps/mobile/PROJECT_STRUCTURE.md` and `apps/mobile/README.md` for detailed 
 - The mobile app currently uses a mock API in development. Update the API endpoint in `apps/mobile/src/services/api.ts` to connect to the real server.
 - CORS is set to `*` for development. Update this in production in `apps/server/src/index.ts`.
 
-## Deployment (Firebase)
-
-The backend API is deployed as a Firebase Function (v2).
-
-### Prerequisites
-
-1. Install Firebase CLI:
-   ```bash
-   npm install -g firebase-tools
-   ```
-
-2. Generate a CI token:
-   ```bash
-   firebase login:ci
-   ```
-
-3. Add the token to GitHub Secrets:
-   - Go to: GitHub Repo → Settings → Secrets → Actions
-   - Name: `FIREBASE_TOKEN`
-   - Value: (The token generated in step 2)
-
-### Local Emulation
-
-To run the Firebase emulators locally:
-
-```bash
-pnpm --filter server build
-firebase emulators:start
-```
-
-- **API URL (local)**: http://127.0.0.1:5001/crowd-70165/us-central1/api
-
-### How Deployments Work
-
-Deployments are automated via GitHub Actions. Any push to the `main` branch triggers a build and deploy of the `apps/server` to Firebase Functions.
-
-### Why Firebase?
-
-Firebase is used for hosting and executing the serverless functions. Data storage (PostgreSQL + PostGIS) is managed separately and connected via connection strings.
-
 ## License
 
 MIT
