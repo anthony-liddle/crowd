@@ -6,6 +6,5 @@ CREATE TABLE "messages" (
 	"radius_meters" integer NOT NULL,
 	"active_minutes" integer NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"expires_at" timestamp NOT NULL,
-	"location" geometry(point)
+	"expires_at" timestamp NOT NULL
 );

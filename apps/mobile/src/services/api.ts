@@ -2,25 +2,24 @@ import { api } from '@repo/api';
 import Constants from 'expo-constants';
 import { Message, CreateMessagePayload } from '@/types/message';
 
-// TODO: This API service currently connects to the real backend.
-// The baseUrl is dynamically configured to work with both simulator (localhost)
-// and physical devices (using the Expo dev server's host IP).
-// For production, update this to use a proper API endpoint configuration.
+// API base URL configuration
+// Priority: EXPO_PUBLIC_API_URL env var > dynamic localhost detection
+// For Fly.io backend, set EXPO_PUBLIC_API_URL in .env file
+// For local development, leave EXPO_PUBLIC_API_URL unset to use localhost
 
-// Dynamic base URL configuration for physical device testing
-const origin = Constants.expoConfig?.hostUri?.split(':')[0];
-const localUrl = origin
-  ? `http://${origin}:8080`
-  : 'http://localhost:8080';
+const getBaseUrl = (): string => {
+  // If EXPO_PUBLIC_API_URL is set, use it (for Fly.io or custom backend)
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
 
-// Set this to true to use the deployed Fly.io backend, or false to use your local machine.
-// Tip: Use the Fly.io URL when testing on a physical device away from your desk.
-const USE_PRODUCTION = true;
-const PRODUCTION_URL = 'https://crowd-wtd6ka.fly.dev';
+  // Otherwise, use dynamic localhost detection for local development
+  // This works with both simulator and physical devices
+  const origin = Constants.expoConfig?.hostUri?.split(':')[0];
+  return origin ? `http://${origin}:8080` : 'http://localhost:8080';
+};
 
-const baseUrl = USE_PRODUCTION
-  ? (process.env.EXPO_PUBLIC_API_URL || PRODUCTION_URL)
-  : localUrl;
+const baseUrl = getBaseUrl();
 
 api.setBaseUrl(baseUrl);
 console.log('API Base URL set to:', baseUrl);

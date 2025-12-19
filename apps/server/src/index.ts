@@ -31,8 +31,6 @@ server.post('/messages', async (request, _reply) => {
     activeMinutes: body.activeMinutes,
     createdAt: created,
     expiresAt: expires,
-    // Construct PostGIS point: POINT(longitude latitude)
-    location: sql`ST_SetSRID(ST_MakePoint(${body.longitude}, ${body.latitude}), 4326)`,
   }).returning({ id: messages.id });
 
   return { id: newMessage.id };
@@ -42,13 +40,26 @@ server.get('/messages/feed', async (request, _reply) => {
   const query = request.query as unknown;
   const parsed = QueryFeedSchema.parse(query);
 
-  // PostGIS query to find messages where:
+  // Haversine formula to find messages where:
   // 1. Message is not expired
   // 2. User is within the message's defined radius
-  // Note: ST_DWithin arguments are (geometry1, geometry2, distance_in_meters)
-  // We check if the user's location is within radiusMeters of the message's location
+  // Haversine formula calculates great-circle distance between two points
+  // R = 6371000 meters (Earth's radius)
+  // distance = 2 * R * asin(sqrt(sin²(Δlat/2) + cos(lat1) * cos(lat2) * sin²(Δlon/2)))
 
-  const userLocation = sql`ST_SetSRID(ST_MakePoint(${parsed.longitude}, ${parsed.latitude}), 4326)`;
+  const userLat = parsed.latitude;
+  const userLng = parsed.longitude;
+
+  // Calculate distance using Haversine formula (result in meters)
+  const haversineDistance = sql<number>`
+    6371000 * 2 * asin(
+      sqrt(
+        power(sin(radians((${messages.latitude}::numeric - ${userLat}) / 2)), 2) +
+        cos(radians(${userLat})) * cos(radians(${messages.latitude}::numeric)) *
+        power(sin(radians((${messages.longitude}::numeric - ${userLng}) / 2)), 2)
+      )
+    )
+  `.mapWith(Number);
 
   const nearbyMessages = await db.select({
     id: messages.id,
@@ -59,13 +70,19 @@ server.get('/messages/feed', async (request, _reply) => {
     activeMinutes: messages.activeMinutes,
     createdAt: messages.createdAt,
     expiresAt: messages.expiresAt,
-    // precise distance calculation
-    distance: sql<number>`ST_DistanceSphere(${messages.location}, ${userLocation})`.mapWith(Number)
+    distance: haversineDistance,
   })
     .from(messages)
     .where(and(
       gt(messages.expiresAt, new Date()), // Not expired
-      sql`ST_DWithin(${messages.location}::geography, ${userLocation}::geography, ${messages.radiusMeters})` // Within radius
+      // Filter by distance using Haversine formula
+      sql`6371000 * 2 * asin(
+        sqrt(
+          power(sin(radians((${messages.latitude}::numeric - ${userLat}) / 2)), 2) +
+          cos(radians(${userLat})) * cos(radians(${messages.latitude}::numeric)) *
+          power(sin(radians((${messages.longitude}::numeric - ${userLng}) / 2)), 2)
+        )
+      ) <= ${messages.radiusMeters}`
     ))
     .orderBy(desc(messages.createdAt)); // Newest first
 
