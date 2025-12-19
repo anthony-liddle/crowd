@@ -1,7 +1,7 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
 import { PostMessageSchema, QueryFeedSchema } from '@repo/shared';
-import { db } from './db';
+import { db } from './db/index';
 import { messages } from './db/schema';
 import { sql, desc, gt, and } from 'drizzle-orm';
 
