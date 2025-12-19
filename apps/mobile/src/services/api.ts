@@ -9,9 +9,18 @@ import { Message, CreateMessagePayload } from '@/types/message';
 
 // Dynamic base URL configuration for physical device testing
 const origin = Constants.expoConfig?.hostUri?.split(':')[0];
-const baseUrl = origin
+const localUrl = origin
   ? `http://${origin}:8080`
   : 'http://localhost:8080';
+
+// Set this to true to use the deployed Fly.io backend, or false to use your local machine.
+// Tip: Use the Fly.io URL when testing on a physical device away from your desk.
+const USE_PRODUCTION = true;
+const PRODUCTION_URL = 'https://crowd-wtd6ka.fly.dev';
+
+const baseUrl = USE_PRODUCTION
+  ? (process.env.EXPO_PUBLIC_API_URL || PRODUCTION_URL)
+  : localUrl;
 
 api.setBaseUrl(baseUrl);
 console.log('API Base URL set to:', baseUrl);
