@@ -5,8 +5,8 @@ A location-based ephemeral messaging platform. Users can post messages that are 
 ## Tech Stack
 
 - **Mobile**: React Native (Expo) with TypeScript, NativeWind (Tailwind CSS)
-- **Server**: Fastify with Drizzle ORM and PostGIS
-- **Database**: PostgreSQL with PostGIS extension
+- **Server**: Fastify with Drizzle ORM
+- **Database**: PostgreSQL (uses Haversine formula for distance calculations)
 - **Monorepo**: pnpm workspaces
 
 ## Prerequisites
@@ -44,7 +44,7 @@ The application will use these environment variables:
 - `HOST`: Server host (default: `0.0.0.0`)
 - `CORS_ORIGIN`: CORS origin setting (default: `*` for development)
 
-4. Start the PostgreSQL database with PostGIS:
+4. Start the PostgreSQL database:
 
 ```bash
 docker-compose up -d
@@ -104,7 +104,7 @@ crowd/
 ├── packages/
 │   ├── api/            # API client package
 │   └── shared/         # Shared types and schemas
-└── docker-compose.yml  # PostgreSQL + PostGIS
+└── docker-compose.yml  # PostgreSQL database
 ```
 
 See `apps/mobile/PROJECT_STRUCTURE.md` and `apps/mobile/README.md` for detailed mobile app documentation.
@@ -115,12 +115,12 @@ See `apps/mobile/PROJECT_STRUCTURE.md` and `apps/mobile/README.md` for detailed 
 - **Ephemeral content**: Messages automatically expire after a set duration
 - **Real-time feed**: Pull-to-refresh message feed
 - **Modern UI**: Built with NativeWind (Tailwind CSS for React Native)
-- **PostGIS integration**: Efficient spatial queries for location-based features
+- **Distance calculations**: Uses Haversine formula for accurate great-circle distance calculations
 
 ## Development Notes
 
-- The server uses PostGIS for spatial queries. Make sure the database has the PostGIS extension enabled (included in the Docker image).
-- The mobile app currently uses a mock API in development. Update the API endpoint in `apps/mobile/src/services/api.ts` to connect to the real server.
+- The server uses the Haversine formula for distance calculations, which works with standard PostgreSQL (no extensions required).
+- The mobile app can connect to either a local server or the deployed Fly.io backend. See `DEPLOYMENT.md` for details.
 - CORS is set to `*` for development. Update this in production in `apps/server/src/index.ts`.
 
 ## Deployment (Fly.io)

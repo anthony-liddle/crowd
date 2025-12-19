@@ -1,5 +1,5 @@
 {
-  "id": "c43ff7b4-1388-460a-af67-a69fb0569dd5",
+  "id": "06e57a4c-8822-49bb-8f9a-74a757945037",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -57,12 +57,6 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true
-        },
-        "location": {
-          "name": "location",
-          "type": "geometry(point)",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},

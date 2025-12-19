@@ -7,4 +7,5 @@ export default defineConfig({
   dbCredentials: {
     url: process.env.DATABASE_URL || "postgres://postgres:postgres@localhost:5432/monorepo_db",
   },
+  schemaFilter: ['public'],
 });

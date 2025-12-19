@@ -32,4 +32,9 @@ EXPOSE 8080
 
 # Start the server
 WORKDIR /app/apps/server
-CMD ["pnpm", "start"]
+
+# Create a startup script that runs migrations then starts the server
+RUN echo '#!/bin/sh\nset -e\npnpm migrate || echo "Migration failed, continuing..."\npnpm start' > /app/apps/server/start.sh && \
+    chmod +x /app/apps/server/start.sh
+
+CMD ["/app/apps/server/start.sh"]
