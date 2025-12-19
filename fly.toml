@@ -9,7 +9,7 @@ primary_region = 'iad'
 [build]
 
 [deploy]
-  release_command = 'sh -c "cd /app/apps/server && pnpm migrate"'
+  release_command = 'sh -c "cd /app/apps/server && DATABASE_URL=$DATABASE_URL_DIRECT pnpm migrate"'
 
 [http_service]
   internal_port = 8080
