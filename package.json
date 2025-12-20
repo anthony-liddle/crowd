@@ -5,8 +5,6 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter mobile start\"",
-    "dev:local": "concurrently \"pnpm --filter server dev\" \"EXPO_PUBLIC_API_URL= pnpm --filter mobile start\"",
-    "dev:fly": "pnpm --filter mobile start",
     "build": "pnpm -r build",
     "dev:server": "pnpm --filter server dev",
     "dev:mobile": "pnpm --filter mobile start",

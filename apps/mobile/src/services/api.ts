@@ -4,11 +4,11 @@ import { Message, CreateMessagePayload } from '@/types/message';
 
 // API base URL configuration
 // Priority: EXPO_PUBLIC_API_URL env var > dynamic localhost detection
-// For Fly.io backend, set EXPO_PUBLIC_API_URL in .env file
+// For production backend, set EXPO_PUBLIC_API_URL in .env file
 // For local development, leave EXPO_PUBLIC_API_URL unset to use localhost
 
 const getBaseUrl = (): string => {
-  // If EXPO_PUBLIC_API_URL is set, use it (for Fly.io or custom backend)
+  // If EXPO_PUBLIC_API_URL is set, use it 
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
