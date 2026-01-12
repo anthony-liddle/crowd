@@ -1,19 +1,28 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { Message } from '@/types/message';
 import { formatTimestamp, formatDistance, formatTimeLeft } from '@/utils/formatters';
+import { Location } from '@/types/location';
 
 /**
  * MessageCard Component
  * Displays a single message with all its details
  */
+
 interface MessageCardProps {
   message: Message;
+  onBoost?: (message: Message, location: Location) => Promise<void>;
+  userLocation?: Location;
 }
 
-export const MessageCard: React.FC<MessageCardProps> = ({ message }) => {
+export const MessageCard: React.FC<MessageCardProps> = ({ message, onBoost, userLocation }) => {
+  const backgroundColor = message.isOwner ? "bg-blue-50" : message.isBoosted ? "bg-purple-50" : "bg-white";
+  const borderColor = message.isOwner ? "border-blue-200" : message.isBoosted ? "border-purple-200" : "border-transparent";
+
+  const canBoost = !message.isOwner && !message.isBoosted && onBoost;
+
   return (
-    <View className="bg-white p-4 mb-3 shadow-xs ">
+    <View className={`${backgroundColor} border ${borderColor} p-3 mb-3 shadow-sm rounded-lg`}>
       {/* Message Text */}
       <Text className="text-base text-gray-900 mb-3 leading-6">
         {message.text}
@@ -22,25 +31,38 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message }) => {
       <View className="flex-row justify-between items-center">
         <View className="flex-row items-center space-x-4">
           {/* Timestamp */}
-          <View className="flex-row items-center">
-            <Text className="text-xs text-gray-500">
-              {formatTimestamp(message.timestamp)}
-            </Text>
-          </View>
+          <Text className="text-xs text-gray-500 mr-3">
+            {formatTimestamp(message.timestamp)}
+          </Text>
 
           {/* Distance */}
-          <View className="flex-row items-center">
-            <Text className="text-xs text-gray-500">
-              📍 {formatDistance(message.activeDistance)}
-            </Text>
-          </View>
+          <Text className="text-xs text-gray-500 mr-3">
+            📍 {formatDistance(message.activeDistance)}
+          </Text>
+
+          {/* Boost Count */}
+          <Text className="text-xs text-gray-500">
+            🚀 {message.boostCount || 0}
+          </Text>
         </View>
 
-        {/* Time Left */}
-        <View className="bg-blue-50 px-2 py-1 rounded">
-          <Text className="text-xs font-semibold text-blue-600">
-            {formatTimeLeft(message.timeLeft)} left
-          </Text>
+        <View className="flex-row items-center space-x-2">
+          {/* Boost Button */}
+          {canBoost && (
+            <TouchableOpacity
+              onPress={() => userLocation && onBoost && onBoost(message, userLocation)}
+              className="bg-purple-100 px-3 py-1 rounded-full mr-2"
+            >
+              <Text className="text-xs font-semibold text-purple-700">Boost</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Time Left */}
+          <View className="bg-gray-100 px-2 py-1 rounded border border-gray-200">
+            <Text className="text-xs font-semibold text-gray-600">
+              {formatTimeLeft(message.timeLeft)}
+            </Text>
+          </View>
         </View>
       </View>
     </View>

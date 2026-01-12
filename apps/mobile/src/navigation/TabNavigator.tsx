@@ -43,10 +43,10 @@ export const TabNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
-        name="Create"
+        name="Post"
         component={CreateMessageScreen}
         options={{
-          tabBarLabel: 'Create',
+          tabBarLabel: 'Post',
           tabBarIcon: ({ color, size }) => (
             <TabIcon name="add" color={color} size={size} />
           ),

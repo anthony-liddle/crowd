@@ -1,9 +1,9 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
-import { PostMessageSchema, QueryFeedSchema } from '@repo/shared';
+import { PostMessageSchema, QueryFeedSchema, BoostMessageSchema } from '@repo/shared';
 import { db } from './db/index';
-import { messages } from './db/schema';
-import { sql, desc, gt, and } from 'drizzle-orm';
+import { messages, messageBoosts } from './db/schema';
+import { sql, asc, gt, and, eq } from 'drizzle-orm';
 
 const server = fastify({ logger: true });
 
@@ -31,37 +31,116 @@ server.post('/messages', async (request, _reply) => {
     activeMinutes: body.activeMinutes,
     createdAt: created,
     expiresAt: expires,
+    ownerId: body.userId,
+    boostCount: 0,
   }).returning({ id: messages.id });
 
   return { id: newMessage.id };
+});
+
+const getIds = (req: any) => {
+  const { id } = req.params as { id: string };
+  return id;
+};
+
+server.post('/messages/:id/boost', async (request, reply) => {
+  const id = getIds(request);
+  const body = BoostMessageSchema.parse(request.body);
+
+  // 1. Fetch message to check ownership and existence
+  const [message] = await db.select().from(messages).where(eq(messages.id, id));
+  if (!message) {
+    return reply.status(404).send({ error: 'Message not found' });
+  }
+
+  // 2. Check rules
+  if (message.expiresAt < new Date()) {
+    return reply.status(400).send({ error: 'Message expired' });
+  }
+  if (message.ownerId === body.userId) {
+    return reply.status(400).send({ error: 'Cannot boost your own message' });
+  }
+
+  // 3. Check if already boosted
+  const [existingBoost] = await db.select()
+    .from(messageBoosts)
+    .where(and(
+      eq(messageBoosts.messageId, id),
+      eq(messageBoosts.userId, body.userId)
+    ));
+
+  if (existingBoost) {
+    return reply.status(400).send({ error: 'Already boosted' });
+  }
+
+  // 4. Boost
+  await db.transaction(async (tx) => {
+    await tx.insert(messageBoosts).values({
+      messageId: id,
+      userId: body.userId,
+      latitude: body.latitude.toString(),
+      longitude: body.longitude.toString(),
+    });
+
+    await tx.update(messages)
+      .set({ boostCount: sql`${messages.boostCount} + 1` })
+      .where(eq(messages.id, id));
+  });
+
+  return { status: 'ok' };
 });
 
 server.get('/messages/feed', async (request, _reply) => {
   const query = request.query as unknown;
   const parsed = QueryFeedSchema.parse(query);
 
-  // Haversine formula to find messages where:
-  // 1. Message is not expired
-  // 2. User is within the message's defined radius
-  // Haversine formula calculates great-circle distance between two points
-  // R = 6371000 meters (Earth's radius)
-  // distance = 2 * R * asin(sqrt(sin²(Δlat/2) + cos(lat1) * cos(lat2) * sin²(Δlon/2)))
-
   const userLat = parsed.latitude;
   const userLng = parsed.longitude;
+  const userId = parsed.userId;
 
-  // Calculate distance using Haversine formula (result in meters)
-  const haversineDistance = sql<number>`
+  // Haversine snippet generator
+  const haversine = (latCol: any, lngCol: any) => sql`
     6371000 * 2 * asin(
       sqrt(
-        power(sin(radians((${messages.latitude}::numeric - ${userLat}) / 2)), 2) +
-        cos(radians(${userLat})) * cos(radians(${messages.latitude}::numeric)) *
-        power(sin(radians((${messages.longitude}::numeric - ${userLng}) / 2)), 2)
+        power(sin(radians((${latCol}::numeric - ${userLat}) / 2)), 2) +
+        cos(radians(${userLat})) * cos(radians(${latCol}::numeric)) *
+        power(sin(radians((${lngCol}::numeric - ${userLng}) / 2)), 2)
       )
     )
-  `.mapWith(Number);
+  `;
 
-  const nearbyMessages = await db.select({
+  // Distance to original message location
+  const distanceToOrigin = haversine(messages.latitude, messages.longitude);
+
+  // Distance to closest boost (Min dist of all boosts for this message)
+  // We use a subquery to find the minimum distance from user to any boost of this message
+  // Note: Drizzle SQL templating
+  const distanceToClosestBoost = sql`
+    (SELECT MIN(${haversine(messageBoosts.latitude, messageBoosts.longitude)})
+     FROM ${messageBoosts}
+     WHERE ${messageBoosts.messageId} = ${messages.id})
+  `;
+
+  // Effective distance: LEAST(origin, COALESCE(closest_boost, Infinity))
+  const effectiveDistance = sql<number>`LEAST(${distanceToOrigin}, COALESCE(${distanceToClosestBoost}, 'Infinity'::float))`.mapWith(Number);
+
+  // isBoosted check
+  const isBoostedSql = userId ? sql<boolean>`EXISTS (
+    SELECT 1 FROM ${messageBoosts}
+    WHERE ${messageBoosts.messageId} = ${messages.id}
+    AND ${messageBoosts.userId} = ${userId}
+  )` : sql<boolean>`false`;
+
+  // Query
+  // We need to filter where effectiveDistance <= radiusMeters
+  // And expiresAt > Now
+
+  const whereClause = and(
+    gt(messages.expiresAt, new Date()),
+    sql`${effectiveDistance} <= ${messages.radiusMeters}`
+  );
+
+  const baseQuery = db.select({
     id: messages.id,
     text: messages.text,
     latitude: messages.latitude,
@@ -70,28 +149,30 @@ server.get('/messages/feed', async (request, _reply) => {
     activeMinutes: messages.activeMinutes,
     createdAt: messages.createdAt,
     expiresAt: messages.expiresAt,
-    distance: haversineDistance,
+    ownerId: messages.ownerId,
+    boostCount: messages.boostCount,
+    distance: effectiveDistance,
+    isBoosted: isBoostedSql,
+    isOwner: userId ? sql<boolean>`${messages.ownerId} = ${userId}` : sql<boolean>`false`,
   })
     .from(messages)
-    .where(and(
-      gt(messages.expiresAt, new Date()), // Not expired
-      // Filter by distance using Haversine formula
-      sql`6371000 * 2 * asin(
-        sqrt(
-          power(sin(radians((${messages.latitude}::numeric - ${userLat}) / 2)), 2) +
-          cos(radians(${userLat})) * cos(radians(${messages.latitude}::numeric)) *
-          power(sin(radians((${messages.longitude}::numeric - ${userLng}) / 2)), 2)
-        )
-      ) <= ${messages.radiusMeters}`
-    ))
-    .orderBy(desc(messages.createdAt)); // Newest first
+    .where(whereClause);
+
+  let nearbyMessages;
+  if (parsed.sortBy === 'soonest') {
+    nearbyMessages = await baseQuery.orderBy(asc(messages.expiresAt));
+  } else {
+    // defaults to nearest
+    nearbyMessages = await baseQuery.orderBy(asc(effectiveDistance));
+  }
 
   // Map to DTO
   return nearbyMessages.map(msg => ({
     ...msg,
     latitude: parseFloat(msg.latitude),
     longitude: parseFloat(msg.longitude),
-    distance: msg.distance
+    distance: msg.distance,
+    ownerId: msg.ownerId || undefined, // handle null
   }));
 });
 

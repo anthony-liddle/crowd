@@ -6,7 +6,7 @@ Complete file tree and explanation of the React Native Expo application.
 
 ```
 react-native-expo-app/
-├── assets/                          # Static assets
+├── assets/                         # Static assets
 │   ├── splash-megaphone.svg        # Megaphone icon for splash screen
 │   ├── icon.png                    # App icon (placeholder)
 │   ├── adaptive-icon.png           # Android adaptive icon (placeholder)
@@ -18,6 +18,7 @@ react-native-expo-app/
 │   │   ├── EmptyList.tsx           # Empty state component for message feed
 │   │   ├── MessageCard.tsx         # Message card display component
 │   │   ├── PageHeader.tsx          # Reusable page header with title and subtitle
+│   │   ├── SortFeed.tsx            # Sort feed component
 │   │   └── ToastConfig.tsx         # Custom toast notification styles
 │   │
 │   ├── hooks/                     # Custom React hooks
@@ -31,25 +32,29 @@ react-native-expo-app/
 │   │   └── CreateMessageScreen.tsx # Message creation form screen
 │   │
 │   ├── services/                  # API and business logic
-│   │   └── api.ts                # Mock REST API service
+│   │   └── api.ts                 # Mock REST API service
 │   │
 │   ├── types/                     # TypeScript type definitions
+│   │   ├── index.ts               # Export all types
+│   │   ├── location.ts            # Location-related types
 │   │   └── message.ts             # Message-related types
 │   │
 │   └── utils/                     # Utility functions
-│       └── formatters.ts          # Date, time, and distance formatters
+│       ├── formatters.ts          # Date, time, and distance formatters
+│       ├── identity.ts            # User identity management
+│       └── storage.ts             # Storage utilities
 │
 ├── app.json                       # Expo configuration
 ├── App.tsx                        # Root application component
-├── babel.config.js               # Babel configuration with NativeWind
-├── global.css                    # Tailwind CSS imports
-├── index.js                      # Entrypoint to the application
-├── metro.config.js               # Metro bundler configuration
-├── nativewind-env.d.ts           # TypeScript definitions for NativeWind
-├── package.json                  # Dependencies and scripts
-├── tailwind.config.js            # Tailwind CSS configuration
-├── tsconfig.json                 # TypeScript configuration
-└── README.md                     # Comprehensive documentation
+├── babel.config.js                # Babel configuration with NativeWind
+├── global.css                     # Tailwind CSS imports
+├── index.js                       # Entrypoint to the application
+├── metro.config.js                # Metro bundler configuration
+├── nativewind-env.d.ts            # TypeScript definitions for NativeWind
+├── package.json                   # Dependencies and scripts
+├── tailwind.config.js             # Tailwind CSS configuration
+├── tsconfig.json                  # TypeScript configuration
+└── README.md                      # Comprehensive documentation
 ```
 
 ## File Explanations
@@ -76,6 +81,7 @@ react-native-expo-app/
 - **CharacterCounter.tsx**: Shows character count with color coding (gray/orange/red) based on proximity to limit. Used in CreateMessageScreen.
 - **EmptyList.tsx**: Empty state component displayed when no messages exist in the feed. Shows helpful text to pull down to refresh or create a message.
 - **PageHeader.tsx**: Reusable page header component with title, optional subtitle, and optional menu slot. Includes safe area padding for top of screen.
+- **SortFeed.tsx**: Sort feed component with nearest and soonest options.
 - **ToastConfig.tsx**: Custom toast notification configuration with three styled variants (success, error, info). Uses green, red, and blue color schemes respectively with proper typography and shadows.
 
 #### Screens (`src/screens/`)
@@ -97,11 +103,14 @@ react-native-expo-app/
 
 #### Types (`src/types/`)
 
+- **location.ts**: TypeScript interfaces for `Location` type.
 - **message.ts**: TypeScript interfaces for `Message` and `CreateMessagePayload` types.
 
 #### Utils (`src/utils/`)
 
 - **formatters.ts**: Utility functions for formatting dates, times, distances, and durations in human-readable formats.
+- **storage.ts**: Utility functions for storing messages in local storage.
+- **identity.ts**: Utility functions for generating and retrieving user IDs.
 
 ### Assets (`assets/`)
 

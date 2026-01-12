@@ -1,6 +1,8 @@
 import { api } from '@repo/api';
 import Constants from 'expo-constants';
-import { Message, CreateMessagePayload } from '@/types/message';
+import { Message, CreateMessagePayload, Location } from '@/types';
+import { getOrGenerateUserId, updateRotationClock } from '@/utils/identity';
+import { addMyMessage, addBoostedMessage } from '@/utils/storage';
 
 // API base URL configuration
 // Priority: EXPO_PUBLIC_API_URL env var > dynamic localhost detection
@@ -30,9 +32,8 @@ const DEFAULT_LOCATION = {
   longitude: 122.6784,
 };
 
-interface LocationParams {
-  latitude?: number;
-  longitude?: number;
+interface LocationParams extends Location {
+  sortBy?: 'nearest' | 'soonest';
 }
 
 /**
@@ -42,15 +43,18 @@ export const getMessages = async (params?: LocationParams): Promise<Message[]> =
   try {
     const latitude = params?.latitude ?? DEFAULT_LOCATION.latitude;
     const longitude = params?.longitude ?? DEFAULT_LOCATION.longitude;
+    const userId = await getOrGenerateUserId();
 
     const dtos = await api.messages.feed({
       latitude,
       longitude,
+      userId,
+      sortBy: params?.sortBy ?? 'nearest',
     });
 
     return dtos.map((dto) => {
-      const expiresAt = new Date(dto.expiresAt);
-      const timeLeftMinutes = Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 60000));
+      const expiresAtDate = new Date(dto.expiresAt);
+      const timeLeftMinutes = Math.max(0, Math.round((expiresAtDate.getTime() - Date.now()) / 60000));
 
       return {
         id: dto.id,
@@ -59,6 +63,10 @@ export const getMessages = async (params?: LocationParams): Promise<Message[]> =
         activeDistance: dto.distance ? parseFloat(dto.distance.toFixed(1)) : 0,
         timeLeft: timeLeftMinutes,
         duration: dto.activeMinutes,
+        boostCount: dto.boostCount,
+        isOwner: dto.isOwner,
+        isBoosted: dto.isBoosted,
+        expiresAt: new Date(dto.expiresAt).toISOString(),
       };
     });
   } catch (error) {
@@ -75,6 +83,7 @@ export const createMessage = async (payload: CreateMessagePayload, params?: Loca
   try {
     const latitude = params?.latitude ?? DEFAULT_LOCATION.latitude;
     const longitude = params?.longitude ?? DEFAULT_LOCATION.longitude;
+    const userId = await getOrGenerateUserId();
 
     const response = await api.messages.post({
       text: payload.text,
@@ -82,7 +91,14 @@ export const createMessage = async (payload: CreateMessagePayload, params?: Loca
       radiusMeters: Math.round(payload.distance),
       latitude,
       longitude,
+      userId,
     });
+
+    await addMyMessage(response.id, payload.duration);
+
+    // Update rotation clock to the expiration of this new message
+    const expiresAt = new Date(Date.now() + payload.duration * 60000);
+    await updateRotationClock(expiresAt);
 
     // Return an optimistic message object to satisfy the interface
     // Note: The UI currently re-fetches the feed, so this return value is mostly unused
@@ -93,10 +109,37 @@ export const createMessage = async (payload: CreateMessagePayload, params?: Loca
       activeDistance: payload.distance,
       timeLeft: payload.duration,
       duration: payload.duration,
+      boostCount: 0,
+      isOwner: true,
+      isBoosted: false,
+      expiresAt: new Date(Date.now() + payload.duration * 60000).toISOString(),
     };
   } catch (error) {
     // TODO: Proper error handling
     console.error('Failed to create message:', error);
+    throw error;
+  }
+};
+
+export const boostMessage = async (messageId: string, expiresAt: string, params?: LocationParams) => {
+  try {
+    const latitude = params?.latitude ?? DEFAULT_LOCATION.latitude;
+    const longitude = params?.longitude ?? DEFAULT_LOCATION.longitude;
+    const userId = await getOrGenerateUserId();
+
+    await api.messages.boost(messageId, {
+      userId,
+      latitude,
+      longitude,
+    });
+
+    await addBoostedMessage(messageId, expiresAt);
+
+    // Update rotation clock
+    await updateRotationClock(new Date(expiresAt));
+  } catch (error) {
+    // TODO: Proper error handling
+    console.error('Failed to boost message:', error);
     throw error;
   }
 };
