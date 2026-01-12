@@ -8,6 +8,13 @@
       "when": 1766116413915,
       "tag": "0000_orange_hex",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1766250289388,
+      "tag": "0001_slimy_richard_fisk",
+      "breakpoints": true
     }
   ]
 }

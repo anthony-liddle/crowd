@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
 import * as Location from 'expo-location';
+import { Location as LocationType } from '@/types/location';
 
 interface UseLocationResult {
-  location: {
-    latitude: number;
-    longitude: number;
-  } | null;
+  location: LocationType | null;
   errorMsg: string | null;
   loading: boolean;
   refreshLocation: () => Promise<void>;
 }
 
+/**
+ * Custom hook for location management.
+ * @returns An object containing the location, error message, loading state, and a function to refresh the location.
+ */
 export const useLocation = (): UseLocationResult => {
-  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [location, setLocation] = useState<LocationType | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 

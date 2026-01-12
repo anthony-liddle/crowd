@@ -115,9 +115,14 @@ react-native-expo-app/
 │   └── ...
 ├── src/
 │   ├── components/         # Reusable UI components
+│   │   ├── CharacterCounter.tsx
+│   │   ├── EmptyList.tsx
 │   │   ├── MessageCard.tsx
-│   │   └── CharacterCounter.tsx
+│   │   ├── PageHeader.tsx
+│   │   ├── SortFeed.tsx
+│   │   └── ToastConfig.tsx
 │   ├── hooks/              # Custom React hooks (future use)
+│   │   └── useLocation.ts
 │   ├── navigation/         # Navigation configuration
 │   │   └── TabNavigator.tsx
 │   ├── screens/            # Screen components
@@ -126,9 +131,13 @@ react-native-expo-app/
 │   ├── services/           # API and business logic
 │   │   └── api.ts
 │   ├── types/              # TypeScript type definitions
+│   │   ├── index.ts
+│   │   ├── location.ts
 │   │   └── message.ts
 │   └── utils/              # Utility functions
-│       └── formatters.ts
+│       ├── formatters.ts
+│       ├── identity.ts
+│       └── storage.ts
 ├── App.tsx                 # Root component
 ├── app.json               # Expo configuration
 ├── babel.config.js        # Babel configuration
@@ -169,9 +178,7 @@ App
    - Shows success toast
    - Navigates back to Feed
 
-3. **Mock API Service**:
-   - Generates fake data using Faker.js
-   - Simulates network delays
+3. **API Service**:
    - Stores data in memory
 
 ### State Management
@@ -179,7 +186,7 @@ App
 - **Local State**: React `useState` for component-level state
 - **Form State**: React Hook Form for form management
 - **Navigation State**: React Navigation handles navigation state
-- **API State**: Local state in components (can be upgraded to Context/Redux)
+- **API State**: Local state in components
 
 ## 📱 Feature Descriptions
 
@@ -308,21 +315,6 @@ export const getMessages = async (): Promise<Message[]> => {
 };
 ```
 
-### Adding Authentication
-
-1. Install auth library (e.g., `expo-auth-session`)
-2. Create auth context/provider
-3. Add login screen
-4. Protect routes in navigation
-
-### Adding State Management
-
-Consider adding:
-
-- **Context API**: For simple global state
-- **Zustand**: Lightweight state management
-- **Redux Toolkit**: For complex state needs
-
 ### Adding Push Notifications
 
 ```bash
@@ -333,12 +325,6 @@ pnpm install expo-notifications
 
 ```bash
 pnpm install expo-image-picker
-```
-
-### Adding Location Services
-
-```bash
-pnpm install expo-location
 ```
 
 ### Styling Enhancements
@@ -380,4 +366,3 @@ For issues and questions:
 ---
 
 **Built with ❤️ using React Native and Expo**
-

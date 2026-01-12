@@ -9,6 +9,10 @@ export interface Message {
   activeDistance: number; // in meters
   timeLeft: number; // in minutes
   duration: number; // total duration in minutes
+  boostCount?: number;
+  isOwner?: boolean;
+  isBoosted?: boolean;
+  expiresAt: string; // ISO Date string
 }
 
 /**
@@ -20,4 +24,3 @@ export interface CreateMessagePayload {
   duration: number; // in minutes (5 minutes to 12 hours)
   distance: number; // in meters (1000 to 5000)
 }
-

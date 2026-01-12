@@ -1,18 +1,19 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
-  Text,
   FlatList,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Message } from '@/types/message';
-import { getMessages } from '@/services/api';
+import { Message, Location } from '@/types';
+import { getMessages, boostMessage } from '@/services/api';
+import { cleanupExpiredRecords } from '@/utils/storage';
 import { MessageCard } from '@/components/MessageCard';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyList } from '@/components/EmptyList';
+import { SortFeed } from '@/components/SortFeed';
 import { useLocation } from '@/hooks/useLocation';
+import Toast from 'react-native-toast-message';
 
 /**
  * FeedScreen Component
@@ -20,9 +21,14 @@ import { useLocation } from '@/hooks/useLocation';
  */
 export const FeedScreen: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sortBy, setSortBy] = useState<'nearest' | 'soonest'>('nearest');
   const { location, errorMsg: locationError, loading: locationLoading, refreshLocation } = useLocation();
+
+  useEffect(() => {
+    cleanupExpiredRecords().catch(console.error);
+  }, []);
 
   /**
    * Load messages from the API
@@ -32,11 +38,12 @@ export const FeedScreen: React.FC = () => {
     if (!location && !locationError && locationLoading) return;
 
     try {
-      if (!refreshing) setLoading(true); // Don't show full screen loader on pull-to-refresh
+      if (!refreshing) setLoading(true);
 
       const data = await getMessages(location ? {
         latitude: location.latitude,
         longitude: location.longitude,
+        sortBy,
       } : undefined);
 
       setMessages(data);
@@ -46,67 +53,65 @@ export const FeedScreen: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [location, locationError, locationLoading, refreshing]); // Dependencies
+  }, [location, locationError, locationLoading, refreshing, sortBy]);
 
   /**
-   * Effect to load messages when location changes or errors
+   * Effect to load messages when location changes or errors or sort changes
    */
   useEffect(() => {
     if (!locationLoading) {
       loadMessages();
     }
-  }, [location, locationError, locationLoading]); // React to location changes
+  }, [location, locationError, locationLoading, sortBy]);
 
-  /**
-   * Handle pull-to-refresh
-   */
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refreshLocation(); // Refresh location first
-    // loadMessages will happen automatically via the useEffect when location updates
-    // but we need to stop refreshing if location doesn't change enough to trigger effect??
-    // Actually, refreshLocation updates state which triggers effect.
-    // But if location is same, state might not update? 
-    // Safest to just call loadMessages explicitly after a short delay or await something.
-    // Let's just call loadMessages which uses current location.
-
-    // Better pattern: refresh location, then fetch messages.
-    // If refreshLocation is async and updates state, we might have a race condition or double fetch.
-    // Simplified: Just re-fetch messages with current location for now. 
+    await refreshLocation();
     loadMessages();
   }, [loadMessages, refreshLocation]);
 
-  /**
-   * Load messages when screen comes into focus
-   */
   useFocusEffect(
     useCallback(() => {
-      // If we have location, refresh messages. If not, maybe try to get location again?
-      // useLocation runs on mount.
       if (!locationLoading) {
         loadMessages();
       }
     }, [loadMessages, locationLoading])
   );
 
-  // if (loading || locationLoading) {
-  //   return (
-  //     <View className="flex-1 justify-center items-center bg-gray-50">
-  //       <ActivityIndicator size="large" color="#3B82F6" />
-  //       <Text className="mt-4 text-gray-600">
-  //         {locationLoading ? 'Finding location...' : 'Loading messages...'}
-  //       </Text>
-  //     </View>
-  //   );
-  // }
+  const handleBoost = async (item: Message, userLoc: Location) => {
+    try {
+      await boostMessage(item.id, item.expiresAt, userLoc);
+      Toast.show({
+        type: 'success',
+        text1: 'Boosted!',
+        text2: 'Message reach extended 🚀',
+      });
+      loadMessages(); // Refresh to see updates
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Boost failed',
+        text2: 'Could not boost message',
+      });
+    }
+  };
 
   return (
     <View className="flex-1 bg-gray-50">
       <PageHeader title="Messages" />
+
+      <SortFeed sortBy={sortBy} setSortBy={setSortBy} />
+
       <FlatList
-        className="flex-1 pt-2"
+        className="flex-1 pt-2 px-2"
         data={messages}
-        renderItem={({ item }) => <MessageCard message={item} />}
+        renderItem={({ item }) => (
+          <MessageCard
+            message={item}
+            onBoost={handleBoost}
+            userLocation={location || undefined}
+          />
+        )}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
         refreshControl={

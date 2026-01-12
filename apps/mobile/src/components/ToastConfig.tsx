@@ -83,7 +83,7 @@ export const toastConfig = {
 
 const styles = StyleSheet.create({
   toastContainer: {
-    width: '90%',
+    width: '95%',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,

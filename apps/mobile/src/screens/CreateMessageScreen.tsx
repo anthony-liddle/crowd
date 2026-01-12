@@ -15,7 +15,7 @@ import Slider from '@react-native-community/slider';
 import Toast from 'react-native-toast-message';
 import { Controller, useForm } from 'react-hook-form';
 import { createMessage } from '@/services/api';
-import { CreateMessagePayload } from '@/types/message';
+import { CreateMessagePayload } from '@/types';
 import { CharacterCounter } from '@/components/CharacterCounter';
 import { PageHeader } from '@/components/PageHeader';
 import { formatDuration } from '@/utils/formatters';
@@ -145,7 +145,7 @@ export const CreateMessageScreen: React.FC = () => {
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View className="flex-1">
-          <PageHeader title="Create Message" />
+          <PageHeader title="Create Post" />
           <ScrollView
             contentContainerStyle={{ paddingBottom: 40, }}
             keyboardShouldPersistTaps="handled"
@@ -266,8 +266,7 @@ export const CreateMessageScreen: React.FC = () => {
             <TouchableOpacity
               onPress={handleSubmit(onSubmit)}
               disabled={isSubmitting}
-              className={`bg-blue-600 rounded-lg p-4 items-center ${isSubmitting ? 'opacity-50' : ''
-                }`}
+              className={`bg-blue-600 rounded-lg p-4 items-center ${isSubmitting ? 'opacity-50' : ''}`}
             >
               <Text className="text-white font-semibold text-base">
                 {isSubmitting ? 'Posting...' : 'Post Message'}
