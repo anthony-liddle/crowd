@@ -8,6 +8,7 @@
     "build": "pnpm -r build",
     "dev:server": "pnpm --filter server dev",
     "dev:mobile": "pnpm --filter mobile start",
+    "dev:tools": "pnpm --filter devtools dev",
     "server:view:db": "pnpm --filter server view:db"
   },
   "devDependencies": {
