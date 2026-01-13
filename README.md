@@ -116,52 +116,26 @@ See `apps/mobile/PROJECT_STRUCTURE.md` and `apps/mobile/README.md` for detailed 
 - **Real-time feed**: Pull-to-refresh message feed
 - **Modern UI**: Built with NativeWind (Tailwind CSS for React Native)
 - **Distance calculations**: Uses Haversine formula for accurate great-circle distance calculations
+- **Anonymous Identity Rotation**: User identities automatically rotate once their active presence expires (see below)
+
+## Anonymous Identity Rotation
+
+Crowd implements a unique "Identity Rotation" system that ensures true ephemerality and user privacy. Unlike most platforms where you have a persistent account, your identity in Crowd is transient.
+
+### How it Works
+1. **Activity-Based Identity**: Your local `userId` is generated automatically. It remains stable as long as you have "active presence" on the platform.
+2. **Rotation Clock**: Every time you post a message or boost someone else's message, the app updates a "Rotation Clock" to the expiration time of that message (or stays the same if the new message expires earlier than your current clock).
+3. **Automatic Reset**: As soon as your current rotation clock passes (meaning all messages you've interacted with have expired), your `userId` is automatically regenerated, and your local message history is wiped.
+
+### Value to the User
+- **True Anonymity**: There is no long-term link between your different "sessions" of activity. Once your posts are gone, your identity is too.
+- **Zero-Footprint**: The platform doesn't just delete your data; it breaks the link between you and your past actions, providing a fresh start every few hours or days.
+- **Privacy by Design**: Users can participate in local discussions without fear of long-term profiling or tracking.
 
 ## Development Notes
 
 - The server uses the Haversine formula for distance calculations, which works with standard PostgreSQL (no extensions required).
-- The mobile app can connect to either a local server or the deployed Fly.io backend. See `DEPLOYMENT.md` for details.
 - CORS is set to `*` for development. Update this in production in `apps/server/src/index.ts`.
-
-## Deployment (Fly.io)
-
-The backend API is deployed as a Docker container on Fly.io.
-
-### Prerequisites
-
-1. Install Fly CLI:
-   ```bash
-   brew install superfly/tap/flyctl
-   ```
-
-2. Login to Fly.io:
-   ```bash
-   fly auth login
-   ```
-
-### First Time Setup
-
-1. Launch the app (this will use the existing `fly.toml` and `Dockerfile`):
-   ```bash
-   fly launch
-   ```
-
-2. Add your database connection string as a secret:
-   ```bash
-   fly secrets set DATABASE_URL="your-postgres-url"
-   ```
-
-### Deploying Updates
-
-To deploy new changes, simply run from the root directory:
-
-```bash
-fly deploy
-```
-
-### Why Fly.io?
-
-Fly.io is used for hosting the Dockerized Fastify server. It provides excellent support for monorepos by allowing us to build from the root directory, ensuring all workspace dependencies are correctly resolved.
 
 ## License
 
