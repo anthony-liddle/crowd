@@ -29,7 +29,7 @@ console.log('API Base URL set to:', baseUrl);
 // TODO: Get actual user location. Hardcoded to Portland, OR for now.
 const DEFAULT_LOCATION = {
   latitude: 45.5152,
-  longitude: 122.6784,
+  longitude: -122.6784,
 };
 
 interface LocationParams extends Location {
