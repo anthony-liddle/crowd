@@ -16,8 +16,8 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
   const [distance, setDistance] = useState(2500); // meters
 
   // Manual location state
-  const [manualLat, setManualLat] = useState<string>('37.7749');
-  const [manualLng, setManualLng] = useState<string>('-122.4194');
+  const [manualLat, setManualLat] = useState<string>('45.5152');
+  const [manualLng, setManualLng] = useState<string>('-122.6784');
   const [useManual, setUseManual] = useState(false);
 
   // Sync with device location initially or when requested
@@ -72,8 +72,6 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
     }
   };
 
-  console.log(location)
-
   return (
     <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 shadow-xl h-full flex flex-col">
       <div className="flex items-center space-x-2 mb-6 text-zinc-100">
@@ -99,7 +97,6 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
           </div>
         </div>
 
-        {/* Controls */}
         <div className="space-y-6">
           {/* Duration Slider */}
           <div>

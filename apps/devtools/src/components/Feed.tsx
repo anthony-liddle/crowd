@@ -12,8 +12,8 @@ export const Feed: React.FC = () => {
   const [boostingId, setBoostingId] = useState<string | null>(null);
 
   // Manual location state (default to SF if no location)
-  const [manualLat, setManualLat] = useState<string>('37.7749');
-  const [manualLng, setManualLng] = useState<string>('-122.4194');
+  const [manualLat, setManualLat] = useState<string>('45.5152');
+  const [manualLng, setManualLng] = useState<string>('-122.6784');
   const [useManual, setUseManual] = useState(false);
 
   // Sync with device location initially or when requested
