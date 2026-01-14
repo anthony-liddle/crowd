@@ -94,11 +94,24 @@ The mobile app is an Expo project.
 - Press `i` for iOS
 - Press `w` for Web
 
+### Run DevTools
+
+Typically used for debugging location-based features and seeding data.
+
+```bash
+pnpm dev:tools
+# OR
+pnpm --filter devtools dev
+```
+
+- **URL**: http://localhost:5173 (default)
+
 ## Project Structure
 
 ```
 crowd/
 ├── apps/
+│   ├── devtools/        # Web-based developer tools
 │   ├── mobile/          # React Native Expo application
 │   └── server/          # Fastify API server
 ├── packages/
@@ -117,6 +130,8 @@ See `apps/mobile/PROJECT_STRUCTURE.md` and `apps/mobile/README.md` for detailed 
 - **Modern UI**: Built with NativeWind (Tailwind CSS for React Native)
 - **Distance calculations**: Uses Haversine formula for accurate great-circle distance calculations
 - **Anonymous Identity Rotation**: User identities automatically rotate once their active presence expires (see below)
+- **Message Boosting**: Boost messages to extend their visibility and radius
+- **Physical Device Location**: Uses real GPS coordinates with permission handling
 
 ## Anonymous Identity Rotation
 
