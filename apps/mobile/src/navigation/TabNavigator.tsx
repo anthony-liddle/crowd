@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { FeedScreen } from '@/screens/FeedScreen';
 import { CreateMessageScreen } from '@/screens/CreateMessageScreen';
+import { CrowdsScreen } from '@/screens/CrowdsScreen';
 
 /**
  * Tab Navigator
@@ -52,6 +53,16 @@ export const TabNavigator: React.FC = () => {
           ),
         }}
       />
+      <Tab.Screen
+        name="Crowds"
+        component={CrowdsScreen}
+        options={{
+          tabBarLabel: 'Crowds',
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon name="users" color={color} size={size} />
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
 };
@@ -70,6 +81,7 @@ const TabIcon: React.FC<TabIconProps> = ({ name, size }) => {
   const iconMap: Record<string, string> = {
     list: '📣',
     add: '➕',
+    users: '👥',
   };
 
   return (
