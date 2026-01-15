@@ -8,4 +8,6 @@ export default defineConfig({
     url: process.env.DATABASE_URL || "postgres://postgres:postgres@localhost:5432/monorepo_db",
   },
   schemaFilter: ['public'],
+  tablesFilter: ["crowds", "crowd_memberships", "messages", "message_boosts"],
 });
+

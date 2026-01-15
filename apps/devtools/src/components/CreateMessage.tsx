@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { createMessage } from '../services/api';
-import type { CreateMessagePayload } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { createMessage, getCrowds } from '../services/api';
+import type { CreateMessagePayload, Crowd } from '../services/api';
 
 import { useLocation } from '../hooks/useLocation';
-import { Send, MapPin, Clock, Edit2, RotateCcw } from 'lucide-react';
+import { Send, MapPin, Clock, Edit2, RotateCcw, Users } from 'lucide-react';
 
 interface CreateMessageProps {
   onSuccess: () => void;
@@ -14,6 +14,8 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
   const [text, setText] = useState('');
   const [duration, setDuration] = useState(60);
   const [distance, setDistance] = useState(2500); // meters
+  const [crowds, setCrowds] = useState<Crowd[]>([]);
+  const [selectedCrowdId, setSelectedCrowdId] = useState<string>('');
 
   // Manual location state
   const [manualLat, setManualLat] = useState<string>('45.5152');
@@ -21,12 +23,25 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
   const [useManual, setUseManual] = useState(false);
 
   // Sync with device location initially or when requested
-  React.useEffect(() => {
+  useEffect(() => {
     if (location && !useManual) {
       setManualLat(location.latitude.toFixed(6));
       setManualLng(location.longitude.toFixed(6));
     }
   }, [location, useManual]);
+
+  // Load crowds
+  useEffect(() => {
+    const loadCrowds = async () => {
+      try {
+        const data = await getCrowds();
+        setCrowds(data);
+      } catch (err) {
+        console.error('Failed to load crowds', err);
+      }
+    };
+    loadCrowds();
+  }, []);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +70,7 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
         text: text.trim(),
         duration,
         distance,
+        crowdId: selectedCrowdId || null,
       };
 
       await createMessage(payload, {
@@ -81,7 +97,7 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
 
       <form onSubmit={handleSubmit} className="flex-col flex flex-1 space-y-6">
         {/* Message Input */}
-        <div className="mb-6 flex-1 pb-6">
+        <div>
           <label className="block text-sm font-medium text-zinc-400 mb-2">
             Message
           </label>
@@ -89,7 +105,7 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={120}
-            className="w-full h-full min-h-[120px] bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-medium leading-relaxed"
+            className="w-full min-h-[120px] bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-medium leading-relaxed"
             placeholder="What's happening nearby?"
           />
           <div className="text-right text-xs text-zinc-500">
@@ -98,44 +114,66 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
         </div>
 
         <div className="space-y-6">
-          {/* Duration Slider */}
+          {/* Crowd Selection */}
           <div>
-            <div className="flex justify-between mb-2">
-              <label className="flex items-center text-sm font-medium text-zinc-400">
-                <Clock className="w-4 h-4 mr-2" />
-                Active Duration
-              </label>
-              <span className="text-sm font-bold text-blue-400">{Math.round(duration)} min</span>
-            </div>
-            <input
-              type="range"
-              min="5"
-              max="720"
-              step="5"
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-            />
+            <label className="flex items-center text-sm font-medium text-zinc-400 mb-2">
+              <Users className="w-4 h-4 mr-2" />
+              Post to
+            </label>
+            <select
+              value={selectedCrowdId}
+              onChange={(e) => setSelectedCrowdId(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none font-medium"
+            >
+              <option value="">🌍 Everyone (Global)</option>
+              {crowds.map((crowd) => (
+                <option key={crowd.id} value={crowd.id}>
+                  👥 {crowd.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Radius Slider */}
-          <div>
-            <div className="flex justify-between mb-2">
-              <label className="flex items-center text-sm font-medium text-zinc-400">
-                <MapPin className="w-4 h-4 mr-2" />
-                Visible Radius
-              </label>
-              <span className="text-sm font-bold text-emerald-400">{(distance / 1000).toFixed(1)} km</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Duration Slider */}
+            <div>
+              <div className="flex justify-between mb-2">
+                <label className="flex items-center text-sm font-medium text-zinc-400">
+                  <Clock className="w-4 h-4 mr-2" />
+                  Duration
+                </label>
+                <span className="text-sm font-bold text-blue-400">{Math.round(duration)}m</span>
+              </div>
+              <input
+                type="range"
+                min="5"
+                max="720"
+                step="5"
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+                className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
             </div>
-            <input
-              type="range"
-              min="1000"
-              max="5000"
-              step="100"
-              value={distance}
-              onChange={(e) => setDistance(Number(e.target.value))}
-              className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-            />
+
+            {/* Radius Slider */}
+            <div>
+              <div className="flex justify-between mb-2">
+                <label className="flex items-center text-sm font-medium text-zinc-400">
+                  <MapPin className="w-4 h-4 mr-2" />
+                  Radius
+                </label>
+                <span className="text-sm font-bold text-emerald-400">{(distance / 1000).toFixed(1)}km</span>
+              </div>
+              <input
+                type="range"
+                min="100"
+                max="5000"
+                step="100"
+                value={distance}
+                onChange={(e) => setDistance(Number(e.target.value))}
+                className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+              />
+            </div>
           </div>
 
           {/* Manual Location Input */}

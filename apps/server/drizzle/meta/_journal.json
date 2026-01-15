@@ -15,6 +15,13 @@
       "when": 1766250289388,
       "tag": "0001_slimy_richard_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768418847442,
+      "tag": "0002_closed_molten_man",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,17 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
-import { PostMessageSchema, QueryFeedSchema, BoostMessageSchema } from '@repo/shared';
+import {
+  PostMessageSchema,
+  QueryFeedSchema,
+  BoostMessageSchema,
+  CreateCrowdSchema,
+  JoinCrowdSchema,
+  LeaveCrowdSchema,
+  QueryCrowdsSchema,
+} from '@repo/shared';
 import { db } from './db/index';
-import { messages, messageBoosts } from './db/schema';
-import { sql, asc, gt, and, eq } from 'drizzle-orm';
+import { messages, messageBoosts, crowds, crowdMemberships } from './db/schema';
+import { sql, asc, gt, and, eq, count, isNull } from 'drizzle-orm';
 
 const server = fastify({ logger: true });
 
@@ -13,13 +21,190 @@ server.register(cors, {
   origin: corsOrigin,
 });
 
+// 24 hours in milliseconds for crowd expiration
+const CROWD_DURATION_MS = 24 * 60 * 60 * 1000;
+
 server.get('/health', async () => {
   return { status: 'ok' };
 });
 
-server.post('/messages', async (request, _reply) => {
+// ==================== CROWDS API ====================
+
+// Create a new crowd
+server.post('/crowds', async (request, reply) => {
+  try {
+    const body = CreateCrowdSchema.parse(request.body);
+
+    const created = new Date();
+    const expires = new Date(created.getTime() + CROWD_DURATION_MS);
+
+    // Create the crowd
+    const [newCrowd] = await db.insert(crowds).values({
+      name: body.name,
+      ownerId: body.userId,
+      isOpen: body.isOpen,
+      createdAt: created,
+      expiresAt: expires,
+    }).returning({ id: crowds.id });
+
+    // Auto-add creator as member
+    await db.insert(crowdMemberships).values({
+      crowdId: newCrowd.id,
+      userId: body.userId,
+    });
+
+    return { id: newCrowd.id };
+  } catch (err: any) {
+    request.log.error({ msg: 'Create Crowd Failed', error: err });
+    return reply.status(500).send({
+      error: 'Internal Server Error',
+      message: err.message,
+    });
+  }
+});
+
+// Get user's active crowds
+server.get('/crowds', async (request, reply) => {
+  try {
+    const query = QueryCrowdsSchema.parse(request.query);
+    const userId = query.userId;
+
+    // Get crowds where user is member and crowd is not expired
+    const userCrowds = await db
+      .select({
+        id: crowds.id,
+        name: crowds.name,
+        isOpen: crowds.isOpen,
+        ownerId: crowds.ownerId,
+        createdAt: crowds.createdAt,
+        expiresAt: crowds.expiresAt,
+      })
+      .from(crowds)
+      .innerJoin(crowdMemberships, eq(crowds.id, crowdMemberships.crowdId))
+      .where(and(
+        eq(crowdMemberships.userId, userId),
+        gt(crowds.expiresAt, new Date())
+      ));
+
+    // Get member counts for each crowd
+    const result = await Promise.all(userCrowds.map(async (crowd) => {
+      const [memberCountResult] = await db
+        .select({ count: count() })
+        .from(crowdMemberships)
+        .where(eq(crowdMemberships.crowdId, crowd.id));
+
+      return {
+        id: crowd.id,
+        name: crowd.name,
+        isOpen: crowd.isOpen,
+        isOwner: crowd.ownerId === userId,
+        memberCount: memberCountResult?.count || 0,
+        createdAt: crowd.createdAt,
+        expiresAt: crowd.expiresAt,
+        canInvite: crowd.isOpen || crowd.ownerId === userId,
+      };
+    }));
+
+    return result;
+  } catch (err: any) {
+    request.log.error({ msg: 'Get Crowds Failed', error: err });
+    return reply.status(500).send({
+      error: 'Internal Server Error',
+      message: err.message,
+    });
+  }
+});
+
+// Join a crowd
+server.post('/crowds/:id/join', async (request, reply) => {
+  try {
+    const crowdId = (request.params as { id: string }).id;
+    const body = JoinCrowdSchema.parse(request.body);
+
+    // 1. Check crowd exists and not expired
+    const [crowd] = await db.select().from(crowds).where(eq(crowds.id, crowdId));
+    if (!crowd) {
+      return reply.status(404).send({ error: 'Crowd not found' });
+    }
+    if (crowd.expiresAt < new Date()) {
+      return reply.status(400).send({ error: 'Crowd expired' });
+    }
+
+    // 2. Check if crowd is open (closed crowds can only be joined via owner invite, not implemented yet)
+    if (!crowd.isOpen) {
+      return reply.status(400).send({ error: 'Crowd is closed' });
+    }
+
+    // 3. Check if already a member
+    const [existing] = await db.select().from(crowdMemberships).where(and(
+      eq(crowdMemberships.crowdId, crowdId),
+      eq(crowdMemberships.userId, body.userId)
+    ));
+    if (existing) {
+      return reply.status(400).send({ error: 'Already a member' });
+    }
+
+    // 4. Add membership
+    await db.insert(crowdMemberships).values({
+      crowdId,
+      userId: body.userId,
+    });
+
+    return { status: 'ok' };
+  } catch (err: any) {
+    request.log.error({ msg: 'Join Crowd Failed', error: err });
+    return reply.status(500).send({
+      error: 'Internal Server Error',
+      message: err.message,
+    });
+  }
+});
+
+// Leave a crowd
+server.post('/crowds/:id/leave', async (request, reply) => {
+  try {
+    const crowdId = (request.params as { id: string }).id;
+    const body = LeaveCrowdSchema.parse(request.body);
+
+    await db.delete(crowdMemberships).where(and(
+      eq(crowdMemberships.crowdId, crowdId),
+      eq(crowdMemberships.userId, body.userId)
+    ));
+
+    return { status: 'ok' };
+  } catch (err: any) {
+    request.log.error({ msg: 'Leave Crowd Failed', error: err });
+    return reply.status(500).send({
+      error: 'Internal Server Error',
+      message: err.message,
+    });
+  }
+});
+
+// ==================== MESSAGES API ====================
+
+server.post('/messages', async (request, reply) => {
   try {
     const body = PostMessageSchema.parse(request.body);
+
+    // If crowdId is provided, verify membership
+    if (body.crowdId) {
+      const [crowd] = await db.select().from(crowds).where(eq(crowds.id, body.crowdId));
+      if (!crowd) {
+        return reply.status(404).send({ error: 'Crowd not found' });
+      }
+      if (crowd.expiresAt < new Date()) {
+        return reply.status(400).send({ error: 'Crowd expired' });
+      }
+
+      const [membership] = await db.select().from(crowdMemberships).where(and(
+        eq(crowdMemberships.crowdId, body.crowdId),
+        eq(crowdMemberships.userId, body.userId)
+      ));
+      if (!membership) {
+        return reply.status(403).send({ error: 'Not a member of this crowd' });
+      }
+    }
 
     const created = new Date();
     const expires = new Date(created.getTime() + body.activeMinutes * 60000);
@@ -34,6 +219,7 @@ server.post('/messages', async (request, _reply) => {
       expiresAt: expires,
       ownerId: body.userId,
       boostCount: 0,
+      crowdId: body.crowdId || null,
     }).returning({ id: messages.id });
 
     return { id: newMessage.id };
@@ -120,7 +306,7 @@ server.post('/messages/:id/boost', async (request, reply) => {
   }
 });
 
-server.get('/messages/feed', async (request, _reply) => {
+server.get('/messages/feed', async (request, reply) => {
   try {
     const query = request.query as unknown;
     const parsed = QueryFeedSchema.parse(query);
@@ -128,6 +314,26 @@ server.get('/messages/feed', async (request, _reply) => {
     const userLat = parsed.latitude;
     const userLng = parsed.longitude;
     const userId = parsed.userId;
+    const crowdId = parsed.crowdId;
+
+    // If crowdId is specified, verify membership
+    if (crowdId && userId) {
+      const [crowd] = await db.select().from(crowds).where(eq(crowds.id, crowdId));
+      if (!crowd) {
+        return reply.status(404).send({ error: 'Crowd not found' });
+      }
+      if (crowd.expiresAt < new Date()) {
+        return reply.status(400).send({ error: 'Crowd expired' });
+      }
+
+      const [membership] = await db.select().from(crowdMemberships).where(and(
+        eq(crowdMemberships.crowdId, crowdId),
+        eq(crowdMemberships.userId, userId)
+      ));
+      if (!membership) {
+        return reply.status(403).send({ error: 'Not a member of this crowd' });
+      }
+    }
 
     // Haversine snippet generator
     const haversine = (latCol: any, lngCol: any) => sql`
@@ -144,17 +350,12 @@ server.get('/messages/feed', async (request, _reply) => {
     const distanceToOrigin = haversine(messages.latitude, messages.longitude);
 
     // Distance to closest boost (Min dist of all boosts for this message)
-    // We use a subquery to find the minimum distance from user to any boost of this message
-    // Note: Drizzle SQL templating
     const distanceToClosestBoost = sql`
     (SELECT MIN(${haversine(messageBoosts.latitude, messageBoosts.longitude)})
      FROM ${messageBoosts}
      WHERE ${messageBoosts.messageId} = ${messages.id})
   `;
 
-    // Effective distance: LEAST(origin, COALESCE(closest_boost, Infinity))
-    // Note: Postgres LEAST ignores NULLs, so we don't strictly need COALESCE if we trust that behavior.
-    // However to be explicit and safe against driver quirks, we use a large number (40000km+) instead of Infinity.
     const MAX_DISTANCE = 100000000; // 100,000 km
     const effectiveDistance = sql<number>`LEAST(${distanceToOrigin}, COALESCE(${distanceToClosestBoost}, ${MAX_DISTANCE}::float))`.mapWith(Number);
 
@@ -165,13 +366,20 @@ server.get('/messages/feed', async (request, _reply) => {
       AND ${eq(messageBoosts.userId, userId)}
     )` : sql<boolean>`false`;
 
-    // Query
-    // We need to filter where effectiveDistance <= radiusMeters
-    // And expiresAt > Now
+    // Build where clause based on crowdId
+    let crowdFilter;
+    if (crowdId) {
+      // Filter to specific crowd
+      crowdFilter = eq(messages.crowdId, crowdId);
+    } else {
+      // Global feed - only messages without a crowd
+      crowdFilter = isNull(messages.crowdId);
+    }
 
     const whereClause = and(
       gt(messages.expiresAt, new Date()),
-      sql`${effectiveDistance} <= ${messages.radiusMeters}`
+      sql`${effectiveDistance} <= ${messages.radiusMeters}`,
+      crowdFilter
     );
 
     const baseQuery = db.select({
@@ -185,6 +393,7 @@ server.get('/messages/feed', async (request, _reply) => {
       expiresAt: messages.expiresAt,
       ownerId: messages.ownerId,
       boostCount: messages.boostCount,
+      crowdId: messages.crowdId,
       distance: effectiveDistance,
       isBoosted: isBoostedSql,
       isOwner: userId ? sql<boolean>`${messages.ownerId} = ${userId}` : sql<boolean>`false`,
@@ -207,6 +416,7 @@ server.get('/messages/feed', async (request, _reply) => {
       longitude: parseFloat(msg.longitude),
       distance: msg.distance,
       ownerId: msg.ownerId || undefined, // handle null
+      crowdId: msg.crowdId || undefined,
     }));
   } catch (err: any) {
     request.log.error({

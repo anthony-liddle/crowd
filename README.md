@@ -131,6 +131,7 @@ See `apps/mobile/PROJECT_STRUCTURE.md` and `apps/mobile/README.md` for detailed 
 - **Distance calculations**: Uses Haversine formula for accurate great-circle distance calculations
 - **Anonymous Identity Rotation**: User identities automatically rotate once their active presence expires (see below)
 - **Message Boosting**: Boost messages to extend their visibility and radius
+- **Custom Crowds**: Create and join private or open groups (expiring in 24h) with crowd-specific feeds
 - **Physical Device Location**: Uses real GPS coordinates with permission handling
 
 ## Anonymous Identity Rotation
@@ -139,13 +140,15 @@ Crowd implements a unique "Identity Rotation" system that ensures true ephemeral
 
 ### How it Works
 1. **Activity-Based Identity**: Your local `userId` is generated automatically. It remains stable as long as you have "active presence" on the platform.
-2. **Rotation Clock**: Every time you post a message or boost someone else's message, the app updates a "Rotation Clock" to the expiration time of that message (or stays the same if the new message expires earlier than your current clock).
+2. **Rotation Clock**: Every time you post a message or boost someone else's message in the global feed, the app updates a "Rotation Clock" to the expiration time of that message (or stays the same if the new message expires earlier than your current clock).
 3. **Automatic Reset**: As soon as your current rotation clock passes (meaning all messages you've interacted with have expired), your `userId` is automatically regenerated, and your local message history is wiped.
+4. **Crowd-Specific Identities**: When you create or join a crowd, a unique crowd-specific user ID is generated and stored locally. This ID is stable and doesn't rotate, ensuring your crowd membership persists even when your main user ID rotates. All operations within a crowd (posting messages, boosting) use this crowd-specific ID.
 
 ### Value to the User
 - **True Anonymity**: There is no long-term link between your different "sessions" of activity. Once your posts are gone, your identity is too.
 - **Zero-Footprint**: The platform doesn't just delete your data; it breaks the link between you and your past actions, providing a fresh start every few hours or days.
 - **Privacy by Design**: Users can participate in local discussions without fear of long-term profiling or tracking.
+- **Stable Crowd Membership**: Your participation in crowds remains intact even when your main identity rotates, allowing for consistent group interactions.
 
 ## Development Notes
 
