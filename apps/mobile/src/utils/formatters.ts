@@ -11,14 +11,14 @@ export const formatTimeLeft = (minutes: number): string => {
   if (minutes < 60) {
     return `${Math.round(minutes)}m`;
   }
-  
+
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = Math.round(minutes % 60);
-  
+
   if (remainingMinutes === 0) {
     return `${hours}h`;
   }
-  
+
   return `${hours}h ${remainingMinutes}m`;
 };
 
@@ -49,7 +49,7 @@ export const formatTimestamp = (date: Date): string => {
   if (diffDays < 7) {
     return `${diffDays}d ago`;
   }
-  
+
   // Format as date if older than a week
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
@@ -73,14 +73,32 @@ export const formatDuration = (minutes: number): string => {
   if (minutes < 60) {
     return `${minutes}m`;
   }
-  
+
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
-  
+
   if (remainingMinutes === 0) {
     return `${hours}h`;
   }
-  
+
   return `${hours}h ${remainingMinutes}m`;
 };
 
+/**
+ * Format time remaining until expiration
+ * @param expiresAt - Expiration Date object
+ * @returns Formatted string (e.g., "2h 30m left", "Expired")
+ */
+export const formatTimeRemaining = (expiresAt: Date): string => {
+  const now = new Date();
+  const diff = expiresAt.getTime() - now.getTime();
+  if (diff <= 0) return 'Expired';
+
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m left`;
+  }
+  return `${minutes}m left`;
+};

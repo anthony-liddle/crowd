@@ -18,10 +18,11 @@ A modern React Native mobile application built with Expo, TypeScript, and Native
 ## ✨ Features
 
 - **Splash Screen**: Custom megaphone-themed splash screen
-- **Message Feed**: Browse messages with pull-to-refresh functionality
-- **Message Creation**: Create new messages with duration and distance settings
+- **Message Feed**: Browse messages (Global or Crowd-specific) with pull-to-refresh functionality
+- **Crowds**: Create, join, and manage private/public groups with 24-hour expiration
+- **Message Creation**: Create new messages w/ optional crowd targeting, duration, and distance settings
 - **Form Validation**: Real-time character counting and validation
-- **Mock API**: Simulated REST API service for development
+- **Real-time Updates**: Live feed updates and crowd membership changes
 - **Beautiful UI**: Modern, clean design using Tailwind CSS via NativeWind
 - **TypeScript**: Full type safety throughout the application
 
@@ -202,6 +203,14 @@ App
 - **Message Display**: Shows text, timestamp, distance, and time left
 - **Empty State**: Friendly message when no messages exist
 - **Loading State**: Activity indicator while fetching
+
+### Crowds
+- **Create**: Create public or closed groups with custom names
+- **Join**: Join crowds via invite codes/links
+- **Manage**: View member counts, ownership status, and expiration
+- **Expiration**: All crowds automatically expire after 24 hours
+- **Integration**: Post messages specifically to crowd members
+- **Crowd-Specific Identity**: Each crowd gets its own stable user ID that doesn't rotate, ensuring membership persists even when your main user ID changes
 
 ### Message Submission Screen
 

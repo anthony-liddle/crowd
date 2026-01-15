@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,16 +10,20 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
 import Toast from 'react-native-toast-message';
 import { Controller, useForm } from 'react-hook-form';
-import { createMessage } from '@/services/api';
-import { CreateMessagePayload } from '@/types';
+import { createMessage, getMyCrowds } from '@/services/api';
+import { CreateMessagePayload, Crowd, FeedSource } from '@/types';
 import { CharacterCounter } from '@/components/CharacterCounter';
 import { PageHeader } from '@/components/PageHeader';
+import { FeedSourceSelector } from '@/components/FeedSourceSelector';
 import { formatDuration } from '@/utils/formatters';
 import { useLocation } from '@/hooks/useLocation';
+
+
+
 
 /**
  * CreateMessageScreen Component
@@ -41,6 +45,27 @@ export const CreateMessageScreen: React.FC = () => {
   const navigation = useNavigation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { location, errorMsg: locationError, loading: locationLoading } = useLocation();
+
+  // Crowd selector state
+  const [crowds, setCrowds] = useState<Crowd[]>([]);
+  const [selectedTarget, setSelectedTarget] = useState<FeedSource>({ id: null, name: 'Everyone' });
+
+
+  // Load crowds for selector
+  const loadCrowds = useCallback(async () => {
+    try {
+      const data = await getMyCrowds();
+      setCrowds(data);
+    } catch (error) {
+      console.error('Error loading crowds:', error);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadCrowds();
+    }, [loadCrowds])
+  );
 
   const {
     control,
@@ -109,6 +134,7 @@ export const CreateMessageScreen: React.FC = () => {
       await createMessage(payload, location ? {
         latitude: location.latitude,
         longitude: location.longitude,
+        crowdId: selectedTarget.id || undefined,
       } : undefined);
 
       // Show success toast
@@ -152,6 +178,20 @@ export const CreateMessageScreen: React.FC = () => {
             keyboardDismissMode="on-drag"
             className="px-4 pt-4"
           >
+            {/* Post Target Selector */}
+            <FeedSourceSelector
+              sources={[
+                { id: null, name: 'Everyone' },
+                ...crowds.map(c => ({ id: c.id, name: c.name }))
+              ]}
+              selectedSource={selectedTarget}
+              onSourceChange={setSelectedTarget}
+              label="Post to"
+              globalLabel="Everyone (Global)"
+              title="Post to..."
+              containerClassName="mb-6"
+            />
+
             {/* Message Text Input */}
             <View className="mb-6">
               <View className="flex-row justify-between items-center mb-2">

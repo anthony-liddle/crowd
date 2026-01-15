@@ -14,8 +14,12 @@ react-native-expo-app/
 │
 ├── src/                            # Source code directory
 │   ├── components/                 # Reusable UI components
-│   │   ├── CharacterCounter.tsx    # Character count display component
+│   │   ├── CreateCrowdModal.tsx    # Modal for creating new crowds
+│   │   ├── CrowdCard.tsx           # Individual crowd item display
+│   │   ├── CrowdsEmptyState.tsx    # Empty state for crowds list
 │   │   ├── EmptyList.tsx           # Empty state component for message feed
+│   │   ├── FeedSourceSelector.tsx  # Platform-native dropdown for Global/Crowd selection
+│   │   ├── JoinCrowdModal.tsx      # Modal for joining crowds via code
 │   │   ├── MessageCard.tsx         # Message card display component
 │   │   ├── PageHeader.tsx          # Reusable page header with title and subtitle
 │   │   ├── SortFeed.tsx            # Sort feed component
@@ -29,7 +33,8 @@ react-native-expo-app/
 │   │
 │   ├── screens/                   # Screen components
 │   │   ├── FeedScreen.tsx         # Message feed screen
-│   │   └── CreateMessageScreen.tsx # Message creation form screen
+│   │   ├── CreateMessageScreen.tsx # Message creation form screen
+│   │   └── CrowdsScreen.tsx       # Crowds management screen
 │   │
 │   ├── services/                  # API and business logic
 │   │   └── api.ts                 # Mock REST API service
@@ -37,7 +42,8 @@ react-native-expo-app/
 │   ├── types/                     # TypeScript type definitions
 │   │   ├── index.ts               # Export all types
 │   │   ├── location.ts            # Location-related types
-│   │   └── message.ts             # Message-related types
+│   │   ├── message.ts             # Message-related types
+│   │   └── crowd.ts               # Crowd-related types
 │   │
 │   └── utils/                     # Utility functions
 │       ├── formatters.ts          # Date, time, and distance formatters
@@ -78,6 +84,11 @@ react-native-expo-app/
 #### Components (`src/components/`)
 
 - **MessageCard.tsx**: Displays a single message with text, timestamp, distance, and time left. Uses NativeWind for styling.
+- **CrowdCard.tsx**: Displays an individual crowd with its status (members, time left) and actions (Invite, Leave).
+- **CreateCrowdModal.tsx**: Handles the UI and logic for creating a new crowd.
+- **JoinCrowdModal.tsx**: Handles the UI and logic for joining a crowd via invite link or code.
+- **CrowdsEmptyState.tsx**: Displayed when the user is not a member of any crowds, offering clear actions to create or join.
+- **FeedSourceSelector.tsx**: A reusable platform-native dropdown for selecting feed sources (Global vs. Crowds). Uses `ActionSheetIOS` for a premium experience on iOS and the native `Picker` on Android.
 - **CharacterCounter.tsx**: Shows character count with color coding (gray/orange/red) based on proximity to limit. Used in CreateMessageScreen.
 - **EmptyList.tsx**: Empty state component displayed when no messages exist in the feed. Shows helpful text to pull down to refresh or create a message.
 - **PageHeader.tsx**: Reusable page header component with title, optional subtitle, and optional menu slot. Includes safe area padding for top of screen.
@@ -88,6 +99,7 @@ react-native-expo-app/
 
 - **FeedScreen.tsx**: Main feed screen displaying list of messages with pull-to-refresh functionality. Uses FlatList for performance.
 - **CreateMessageScreen.tsx**: Form screen for creating new messages with text input, duration slider, and distance slider. Includes validation and submission logic.
+- **CrowdsScreen.tsx**: Screen for managing crowd memberships, joining new crowds, and creating private crowds.
 
 #### Hooks (`src/hooks/`)
 
@@ -99,12 +111,13 @@ react-native-expo-app/
 
 #### Services (`src/services/`)
 
-- **api.ts**: Mock REST API service using Faker.js to generate fake messages. Implements `getMessages()` and `createMessage()` functions with simulated network delays.
+- **api.ts**: API service wrapper around `@repo/api`. Handles authentication, location injection, and maps API DTOs to internal types.
 
 #### Types (`src/types/`)
 
 - **location.ts**: TypeScript interfaces for `Location` type.
 - **message.ts**: TypeScript interfaces for `Message` and `CreateMessagePayload` types.
+- **crowd.ts**: TypeScript interfaces for `Crowd` and `FeedSource` types.
 
 #### Utils (`src/utils/`)
 
@@ -142,11 +155,18 @@ react-native-expo-app/
 - Toast notifications on success/error
 - Navigation back to Feed on success
 
-### Mock API
-- `src/services/api.ts` provides fake data
-- Uses Faker.js for realistic fake messages
-- Simulates network delays
-- Stores data in memory
+### Crowds Management
+- `src/screens/CrowdsScreen.tsx`
+- List active memberships
+- Create new crowds (private/public)
+- Join via ID
+- Leave crowds
+
+### API Integration
+- `src/services/api.ts` connects to Backend
+- Uses `@repo/api` client
+- Handles location injection
+- Manages user identity rotation updates
 
 ### Styling
 - NativeWind (Tailwind CSS) throughout

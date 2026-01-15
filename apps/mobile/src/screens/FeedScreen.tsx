@@ -1,17 +1,14 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import {
-  View,
-  FlatList,
-  RefreshControl,
-} from 'react-native';
+import { View, FlatList, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Message, Location } from '@/types';
-import { getMessages, boostMessage } from '@/services/api';
+import { Message, Location, Crowd, FeedSource } from '@/types';
+import { getMessages, boostMessage, getMyCrowds } from '@/services/api';
 import { cleanupExpiredRecords } from '@/utils/storage';
 import { MessageCard } from '@/components/MessageCard';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyList } from '@/components/EmptyList';
 import { SortFeed } from '@/components/SortFeed';
+import { FeedSourceSelector } from '@/components/FeedSourceSelector';
 import { useLocation } from '@/hooks/useLocation';
 import Toast from 'react-native-toast-message';
 
@@ -26,9 +23,29 @@ export const FeedScreen: React.FC = () => {
   const [sortBy, setSortBy] = useState<'nearest' | 'soonest'>('nearest');
   const { location, errorMsg: locationError, loading: locationLoading, refreshLocation } = useLocation();
 
+  // Feed source state
+  const [crowds, setCrowds] = useState<Crowd[]>([]);
+  const [selectedFeed, setSelectedFeed] = useState<FeedSource>({ id: null, name: 'Global' });
+
   useEffect(() => {
     cleanupExpiredRecords().catch(console.error);
   }, []);
+
+  // Load crowds for feed selector
+  const loadCrowds = useCallback(async () => {
+    try {
+      const data = await getMyCrowds();
+      setCrowds(data);
+    } catch (error) {
+      console.error('Error loading crowds:', error);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadCrowds();
+    }, [loadCrowds])
+  );
 
   /**
    * Load messages from the API
@@ -44,6 +61,7 @@ export const FeedScreen: React.FC = () => {
         latitude: location.latitude,
         longitude: location.longitude,
         sortBy,
+        crowdId: selectedFeed.id || undefined,
       } : undefined);
 
       setMessages(data);
@@ -53,7 +71,7 @@ export const FeedScreen: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [location, locationError, locationLoading, refreshing, sortBy]);
+  }, [location, locationError, locationLoading, refreshing, sortBy, selectedFeed]);
 
   /**
    * Effect to load messages when location changes or errors or sort changes
@@ -62,13 +80,14 @@ export const FeedScreen: React.FC = () => {
     if (!locationLoading) {
       loadMessages();
     }
-  }, [location, locationError, locationLoading, sortBy]);
+  }, [location, locationError, locationLoading, sortBy, selectedFeed]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refreshLocation();
+    await loadCrowds();
     loadMessages();
-  }, [loadMessages, refreshLocation]);
+  }, [loadMessages, refreshLocation, loadCrowds]);
 
   useFocusEffect(
     useCallback(() => {
@@ -80,7 +99,10 @@ export const FeedScreen: React.FC = () => {
 
   const handleBoost = async (item: Message, userLoc: Location) => {
     try {
-      await boostMessage(item.id, item.expiresAt, userLoc);
+      await boostMessage(item.id, item.expiresAt, {
+        ...userLoc,
+        crowdId: selectedFeed.id || undefined,
+      });
       Toast.show({
         type: 'success',
         text1: 'Boosted!',
@@ -96,9 +118,21 @@ export const FeedScreen: React.FC = () => {
     }
   };
 
+  // Build feed sources list
+  const feedSources: FeedSource[] = [
+    { id: null, name: 'Global' },
+    ...crowds.map(c => ({ id: c.id, name: c.name })),
+  ];
+
   return (
     <View className="flex-1 bg-gray-50">
       <PageHeader title="Messages" />
+
+      <FeedSourceSelector
+        sources={feedSources}
+        selectedSource={selectedFeed}
+        onSourceChange={setSelectedFeed}
+      />
 
       <SortFeed sortBy={sortBy} setSortBy={setSortBy} />
 
@@ -127,3 +161,4 @@ export const FeedScreen: React.FC = () => {
     </View>
   );
 };
+
