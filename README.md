@@ -154,6 +154,7 @@ Crowd implements a unique "Identity Rotation" system that ensures true ephemeral
 
 - The server uses the Haversine formula for distance calculations, which works with standard PostgreSQL (no extensions required).
 - CORS is set to `*` for development. Update this in production in `apps/server/src/index.ts`.
+- **Database Cleanup**: Expired messages and crowds are automatically cleaned up via a periodic cleanup script. See `apps/server/README.md` for details on running and scheduling the cleanup script.
 
 ## License
 
