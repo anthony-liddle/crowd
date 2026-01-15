@@ -8,7 +8,8 @@
     "start": "node dist/index.js",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
-    "view:db": "drizzle-kit studio"
+    "view:db": "drizzle-kit studio",
+    "cleanup": "tsx src/scripts/cleanup-expired.ts"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

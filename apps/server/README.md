@@ -40,6 +40,40 @@ The backend service for the Crowd application, built with **Fastify**, **TypeScr
 
 **Note**: The server supports crowd-specific user IDs. When clients create or join crowds, they use crowd-specific IDs for all operations within that crowd, ensuring membership persists even when the main user ID rotates.
 
+## Database Cleanup
+
+The server includes a cleanup script that removes expired data from the database:
+
+- **Expired Messages**: Messages that have passed their `expiresAt` timestamp are deleted, along with all associated boosts
+- **Expired Crowds**: Crowds that have passed their `expiresAt` timestamp (24 hours after creation) are deleted, and their memberships are automatically removed via cascade delete
+
+### Running the Cleanup Script
+
+**Manually:**
+```bash
+pnpm cleanup
+# OR
+pnpm --filter server cleanup
+```
+
+**Scheduled (Cron):**
+Set up a cron job to run the cleanup script periodically. Example running every hour:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line (adjust path as needed)
+0 * * * * cd /path/to/crowd && pnpm --filter server cleanup
+```
+
+**Recommended Frequency:**
+- Run every hour for active deployments
+- Run daily for low-traffic deployments
+- The script is idempotent and safe to run multiple times
+
+The script logs all deletions and exits with code 0 on success or 1 on error, making it suitable for monitoring and alerting.
+
 ## Development
 
 ```bash
