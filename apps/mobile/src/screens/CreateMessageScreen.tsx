@@ -22,9 +22,6 @@ import { FeedSourceSelector } from '@/components/FeedSourceSelector';
 import { formatDuration } from '@/utils/formatters';
 import { useLocation } from '@/hooks/useLocation';
 
-
-
-
 /**
  * CreateMessageScreen Component
  * Form for creating new messages with validation
@@ -49,7 +46,6 @@ export const CreateMessageScreen: React.FC = () => {
   // Crowd selector state
   const [crowds, setCrowds] = useState<Crowd[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<FeedSource>({ id: null, name: 'Everyone' });
-
 
   // Load crowds for selector
   const loadCrowds = useCallback(async () => {

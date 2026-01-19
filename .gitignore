@@ -60,3 +60,5 @@ apps/mobile/android/local.properties
 
 # Server specific
 
+# Misc
+.notes/
