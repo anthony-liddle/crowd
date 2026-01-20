@@ -6,8 +6,8 @@ import {
   getAllCrowdUserIds 
 } from '../utils/identity';
 
-// Set base URL for local development
-const BASE_URL = 'http://localhost:8080';
+// Set base URL from environment variable or default to localhost
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 api.setBaseUrl(BASE_URL);
 
 export { api };

@@ -15,7 +15,7 @@ import Slider from '@react-native-community/slider';
 import Toast from 'react-native-toast-message';
 import { Controller, useForm } from 'react-hook-form';
 import { createMessage, getMyCrowds } from '@/services/api';
-import { CreateMessagePayload, Crowd, FeedSource } from '@/types';
+import { CreateMessagePayload, Crowd, FeedSource, TabNavigationProp } from '@/types';
 import { CharacterCounter } from '@/components/CharacterCounter';
 import { PageHeader } from '@/components/PageHeader';
 import { FeedSourceSelector } from '@/components/FeedSourceSelector';
@@ -39,7 +39,7 @@ const MAX_DISTANCE = 5000; // 5000 meters
 const MAX_TEXT_LENGTH = 120;
 
 export const CreateMessageScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<TabNavigationProp>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { location, errorMsg: locationError, loading: locationLoading } = useLocation();
 
@@ -143,7 +143,7 @@ export const CreateMessageScreen: React.FC = () => {
 
       // Navigate back to feed
       setTimeout(() => {
-        navigation.navigate('Feed' as never);
+        navigation.navigate('Feed');
 
         // Clear form
         reset();

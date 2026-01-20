@@ -9,6 +9,11 @@ export {
   RotateMembershipSchema,
   CrowdSchema,
   QueryCrowdsSchema,
+  // Response schemas for API client validation
+  MessageResponseSchema,
+  CrowdResponseSchema,
+  IdResponseSchema,
+  StatusResponseSchema,
   type PostMessageDto,
   type QueryFeedDto,
   type MessageDto,
@@ -19,5 +24,10 @@ export {
   type RotateMembershipDto,
   type CrowdDto,
   type QueryCrowdsDto,
+  // Response types
+  type MessageResponse,
+  type CrowdResponse,
+  type IdResponse,
+  type StatusResponse,
 } from './schemas';
 

@@ -71,9 +71,14 @@ export function Crowds() {
     }
   };
 
-  const handleCopyId = (id: string) => {
-    navigator.clipboard.writeText(id);
-    alert('Crowd ID copied!');
+  const handleCopyId = async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(id);
+      alert('Crowd ID copied!');
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+      alert('Failed to copy to clipboard');
+    }
   };
 
   return (

@@ -16,9 +16,14 @@ import { sql, asc, gt, and, eq, count, isNull } from 'drizzle-orm';
 const server = fastify({ logger: true });
 
 // CORS configuration from environment variable
-const corsOrigin = process.env.CORS_ORIGIN || '*';
+// Default to localhost origins for development security
+const corsOrigin = process.env.CORS_ORIGIN;
+if (!corsOrigin) {
+  console.warn('CORS_ORIGIN not set, defaulting to localhost origins only');
+}
 server.register(cors, {
-  origin: corsOrigin,
+  origin: corsOrigin || ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8081'],
+  credentials: true,
 });
 
 // 24 hours in milliseconds for crowd expiration
@@ -54,11 +59,12 @@ server.post('/crowds', async (request, reply) => {
     });
 
     return { id: newCrowd.id };
-  } catch (err: any) {
+  } catch (err: unknown) {
     request.log.error({ msg: 'Create Crowd Failed', error: err });
+    const message = err instanceof Error ? err.message : 'Unknown error';
     return reply.status(500).send({
       error: 'Internal Server Error',
-      message: err.message,
+      message,
     });
   }
 });
@@ -69,8 +75,8 @@ server.get('/crowds', async (request, reply) => {
     const query = QueryCrowdsSchema.parse(request.query);
     const userId = query.userId;
 
-    // Get crowds where user is member and crowd is not expired
-    const userCrowds = await db
+    // Get crowds with member counts in a single query to avoid N+1
+    const userCrowdsWithCounts = await db
       .select({
         id: crowds.id,
         name: crowds.name,
@@ -78,39 +84,39 @@ server.get('/crowds', async (request, reply) => {
         ownerId: crowds.ownerId,
         createdAt: crowds.createdAt,
         expiresAt: crowds.expiresAt,
+        memberCount: count(crowdMemberships.id),
       })
       .from(crowds)
       .innerJoin(crowdMemberships, eq(crowds.id, crowdMemberships.crowdId))
       .where(and(
-        eq(crowdMemberships.userId, userId),
-        gt(crowds.expiresAt, new Date())
-      ));
+        gt(crowds.expiresAt, new Date()),
+        // Subquery to check if user is a member
+        sql`EXISTS (
+          SELECT 1 FROM ${crowdMemberships} cm
+          WHERE cm.crowd_id = ${crowds.id}
+          AND cm.user_id = ${userId}
+        )`
+      ))
+      .groupBy(crowds.id);
 
-    // Get member counts for each crowd
-    const result = await Promise.all(userCrowds.map(async (crowd) => {
-      const [memberCountResult] = await db
-        .select({ count: count() })
-        .from(crowdMemberships)
-        .where(eq(crowdMemberships.crowdId, crowd.id));
-
-      return {
-        id: crowd.id,
-        name: crowd.name,
-        isOpen: crowd.isOpen,
-        isOwner: crowd.ownerId === userId,
-        memberCount: memberCountResult?.count || 0,
-        createdAt: crowd.createdAt,
-        expiresAt: crowd.expiresAt,
-        canInvite: crowd.isOpen || crowd.ownerId === userId,
-      };
+    const result = userCrowdsWithCounts.map(crowd => ({
+      id: crowd.id,
+      name: crowd.name,
+      isOpen: crowd.isOpen,
+      isOwner: crowd.ownerId === userId,
+      memberCount: Number(crowd.memberCount) || 0,
+      createdAt: crowd.createdAt,
+      expiresAt: crowd.expiresAt,
+      canInvite: crowd.isOpen || crowd.ownerId === userId,
     }));
 
     return result;
-  } catch (err: any) {
+  } catch (err: unknown) {
     request.log.error({ msg: 'Get Crowds Failed', error: err });
+    const message = err instanceof Error ? err.message : 'Unknown error';
     return reply.status(500).send({
       error: 'Internal Server Error',
-      message: err.message,
+      message,
     });
   }
 });
@@ -135,27 +141,27 @@ server.post('/crowds/:id/join', async (request, reply) => {
       return reply.status(400).send({ error: 'Crowd is closed' });
     }
 
-    // 3. Check if already a member
-    const [existing] = await db.select().from(crowdMemberships).where(and(
-      eq(crowdMemberships.crowdId, crowdId),
-      eq(crowdMemberships.userId, body.userId)
-    ));
-    if (existing) {
-      return reply.status(400).send({ error: 'Already a member' });
+    // 3. Add membership - rely on unique constraint to handle race conditions
+    try {
+      await db.insert(crowdMemberships).values({
+        crowdId,
+        userId: body.userId,
+      });
+    } catch (insertErr: unknown) {
+      // Check if it's a unique constraint violation
+      if (insertErr instanceof Error && insertErr.message.includes('unique_crowd_membership')) {
+        return reply.status(400).send({ error: 'Already a member' });
+      }
+      throw insertErr;
     }
 
-    // 4. Add membership
-    await db.insert(crowdMemberships).values({
-      crowdId,
-      userId: body.userId,
-    });
-
     return { status: 'ok' };
-  } catch (err: any) {
+  } catch (err: unknown) {
     request.log.error({ msg: 'Join Crowd Failed', error: err });
+    const message = err instanceof Error ? err.message : 'Unknown error';
     return reply.status(500).send({
       error: 'Internal Server Error',
-      message: err.message,
+      message,
     });
   }
 });
@@ -172,11 +178,12 @@ server.post('/crowds/:id/leave', async (request, reply) => {
     ));
 
     return { status: 'ok' };
-  } catch (err: any) {
+  } catch (err: unknown) {
     request.log.error({ msg: 'Leave Crowd Failed', error: err });
+    const message = err instanceof Error ? err.message : 'Unknown error';
     return reply.status(500).send({
       error: 'Internal Server Error',
-      message: err.message,
+      message,
     });
   }
 });
@@ -223,19 +230,16 @@ server.post('/messages', async (request, reply) => {
     }).returning({ id: messages.id });
 
     return { id: newMessage.id };
-  } catch (err: any) {
+  } catch (err: unknown) {
     request.log.error({
       msg: 'Create Message Failed',
       error: err,
-      code: err.code,
-      detail: err.detail,
     });
-    return {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return reply.status(500).send({
       error: 'Internal Server Error',
-      message: err.message,
-      detail: err.detail,
-      code: err.code,
-    };
+      message,
+    });
   }
 });
 
@@ -263,46 +267,39 @@ server.post('/messages/:id/boost', async (request, reply) => {
       return reply.status(400).send({ error: 'Cannot boost your own message' });
     }
 
-    // 3. Check if already boosted
-    const [existingBoost] = await db.select()
-      .from(messageBoosts)
-      .where(and(
-        eq(messageBoosts.messageId, id),
-        eq(messageBoosts.userId, body.userId)
-      ));
+    // 3. Boost - rely on unique constraint to handle race conditions
+    try {
+      await db.transaction(async (tx) => {
+        await tx.insert(messageBoosts).values({
+          messageId: id,
+          userId: body.userId,
+          latitude: body.latitude.toString(),
+          longitude: body.longitude.toString(),
+        });
 
-    if (existingBoost) {
-      return reply.status(400).send({ error: 'Already boosted' });
+        await tx.update(messages)
+          .set({ boostCount: sql`${messages.boostCount} + 1` })
+          .where(eq(messages.id, id));
+      });
+    } catch (insertErr: unknown) {
+      // Check if it's a unique constraint violation
+      if (insertErr instanceof Error && insertErr.message.includes('unique_user_boost')) {
+        return reply.status(400).send({ error: 'Already boosted' });
+      }
+      throw insertErr;
     }
 
-    // 4. Boost
-    await db.transaction(async (tx) => {
-      await tx.insert(messageBoosts).values({
-        messageId: id,
-        userId: body.userId,
-        latitude: body.latitude.toString(),
-        longitude: body.longitude.toString(),
-      });
-
-      await tx.update(messages)
-        .set({ boostCount: sql`${messages.boostCount} + 1` })
-        .where(eq(messages.id, id));
-    });
-
     return { status: 'ok' };
-  } catch (err: any) {
+  } catch (err: unknown) {
     request.log.error({
       msg: 'Boost Message Failed',
       error: err,
-      code: err.code,
-      detail: err.detail,
     });
-    return {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return reply.status(500).send({
       error: 'Internal Server Error',
-      message: err.message,
-      detail: err.detail,
-      code: err.code,
-    };
+      message,
+    });
   }
 });
 
@@ -403,10 +400,16 @@ server.get('/messages/feed', async (request, reply) => {
 
     let nearbyMessages;
     if (parsed.sortBy === 'soonest') {
-      nearbyMessages = await baseQuery.orderBy(asc(messages.expiresAt));
+      nearbyMessages = await baseQuery
+        .orderBy(asc(messages.expiresAt))
+        .limit(parsed.limit)
+        .offset(parsed.offset);
     } else {
       // defaults to nearest
-      nearbyMessages = await baseQuery.orderBy(asc(effectiveDistance));
+      nearbyMessages = await baseQuery
+        .orderBy(asc(effectiveDistance))
+        .limit(parsed.limit)
+        .offset(parsed.offset);
     }
 
     // Map to DTO
@@ -418,22 +421,34 @@ server.get('/messages/feed', async (request, reply) => {
       ownerId: msg.ownerId || undefined, // handle null
       crowdId: msg.crowdId || undefined,
     }));
-  } catch (err: any) {
+  } catch (err: unknown) {
     request.log.error({
       msg: 'Feed Query Failed',
       error: err,
-      code: err.code,
-      detail: err.detail,
     });
-    // Send detailed error to client for debugging
-    return {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return reply.status(500).send({
       error: 'Internal Server Error',
-      message: err.message,
-      detail: err.detail, // Postgres error detail
-      code: err.code, // Postgres error code
-    };
+      message,
+    });
   }
 });
+
+// Graceful shutdown handler
+const shutdown = async (signal: string) => {
+  console.log(`Received ${signal}, shutting down gracefully...`);
+  try {
+    await server.close();
+    console.log('Server closed');
+    process.exit(0);
+  } catch (err) {
+    console.error('Error during shutdown:', err);
+    process.exit(1);
+  }
+};
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 const start = async () => {
   try {

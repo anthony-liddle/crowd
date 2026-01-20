@@ -74,7 +74,16 @@ export const getOrGenerateUserId = async (): Promise<string> => {
 export const getOrGenerateCrowdUserId = async (crowdId: string): Promise<string> => {
   try {
     const stored = await SecureStore.getItemAsync(CROWD_USER_IDS_KEY);
-    let crowdUserIds: Record<string, string> = stored ? JSON.parse(stored) : {};
+    let crowdUserIds: Record<string, string> = {};
+
+    if (stored) {
+      try {
+        crowdUserIds = JSON.parse(stored);
+      } catch (parseError) {
+        console.error('Failed to parse crowd user IDs, resetting:', parseError);
+        await SecureStore.deleteItemAsync(CROWD_USER_IDS_KEY);
+      }
+    }
 
     if (!crowdUserIds[crowdId]) {
       crowdUserIds[crowdId] = uuidv4();
@@ -98,7 +107,15 @@ export const deleteCrowdUserId = async (crowdId: string): Promise<void> => {
     const stored = await SecureStore.getItemAsync(CROWD_USER_IDS_KEY);
     if (!stored) return;
 
-    const crowdUserIds: Record<string, string> = JSON.parse(stored);
+    let crowdUserIds: Record<string, string>;
+    try {
+      crowdUserIds = JSON.parse(stored);
+    } catch (parseError) {
+      console.error('Failed to parse crowd user IDs during delete, resetting:', parseError);
+      await SecureStore.deleteItemAsync(CROWD_USER_IDS_KEY);
+      return;
+    }
+
     delete crowdUserIds[crowdId];
     await SecureStore.setItemAsync(CROWD_USER_IDS_KEY, JSON.stringify(crowdUserIds));
   } catch (error) {
@@ -113,7 +130,15 @@ export const deleteCrowdUserId = async (crowdId: string): Promise<void> => {
 export const getAllCrowdUserIds = async (): Promise<Record<string, string>> => {
   try {
     const stored = await SecureStore.getItemAsync(CROWD_USER_IDS_KEY);
-    return stored ? JSON.parse(stored) : {};
+    if (!stored) return {};
+
+    try {
+      return JSON.parse(stored);
+    } catch (parseError) {
+      console.error('Failed to parse crowd user IDs, resetting:', parseError);
+      await SecureStore.deleteItemAsync(CROWD_USER_IDS_KEY);
+      return {};
+    }
   } catch (error) {
     console.error('Error retrieving crowd user identities:', error);
     return {};
