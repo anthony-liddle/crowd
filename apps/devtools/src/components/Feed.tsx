@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { getMessages, boostMessage, getCrowds } from '../services/api';
 import type { Message, Crowd } from '../services/api';
 import { useLocation } from '../hooks/useLocation';
@@ -39,7 +39,7 @@ export const Feed: React.FC = () => {
     loadCrowds();
   }, []);
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     const lat = parseFloat(manualLat);
     const lng = parseFloat(manualLng);
 
@@ -58,11 +58,11 @@ export const Feed: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [manualLat, manualLng, selectedCrowdId]);
 
   useEffect(() => {
     fetchMessages();
-  }, [manualLat, manualLng, selectedCrowdId]);
+  }, [fetchMessages]);
 
   // Refresh every 30 seconds to show accurate countdowns
   useEffect(() => {
@@ -71,7 +71,7 @@ export const Feed: React.FC = () => {
       fetchMessages();
     }, 30000);
     return () => clearInterval(interval);
-  }, [manualLat, manualLng, selectedCrowdId]);
+  }, [fetchMessages]);
 
 
   const handleBoost = async (msg: Message) => {

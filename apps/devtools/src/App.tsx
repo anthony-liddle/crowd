@@ -1,11 +1,63 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component, ReactNode } from 'react';
 import { CreateMessage } from './components/CreateMessage';
 import { Feed } from './components/Feed';
 import { Crowds } from './components/Crowds';
 import { getOrGenerateUserId, refreshUserId } from './utils/identity';
-import { User, RefreshCw, Terminal, MessageSquare, Users } from 'lucide-react';
+import { User, RefreshCw, Terminal, MessageSquare, Users, AlertTriangle } from 'lucide-react';
 
 type Tab = 'messages' | 'crowds';
+
+// Error Boundary Component
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 max-w-md w-full text-center">
+            <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-red-400 mb-2">Something went wrong</h2>
+            <p className="text-zinc-400 text-sm mb-4">
+              {this.state.error?.message || 'An unexpected error occurred'}
+            </p>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+              className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function App() {
   const [userId, setUserId] = useState('');
@@ -110,5 +162,13 @@ function App() {
   );
 }
 
-export default App;
+function AppWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}
+
+export default AppWithErrorBoundary;
 

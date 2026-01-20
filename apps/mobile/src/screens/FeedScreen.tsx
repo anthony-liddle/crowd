@@ -41,12 +41,6 @@ export const FeedScreen: React.FC = () => {
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadCrowds();
-    }, [loadCrowds])
-  );
-
   /**
    * Load messages from the API
    */
@@ -80,21 +74,23 @@ export const FeedScreen: React.FC = () => {
     if (!locationLoading) {
       loadMessages();
     }
-  }, [location, locationError, locationLoading, sortBy, selectedFeed]);
+  }, [loadMessages, locationLoading, location, locationError, sortBy, selectedFeed]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refreshLocation();
     await loadCrowds();
-    loadMessages();
+    await loadMessages();
   }, [loadMessages, refreshLocation, loadCrowds]);
 
+  // Consolidated useFocusEffect - load crowds and messages when screen is focused
   useFocusEffect(
     useCallback(() => {
+      loadCrowds();
       if (!locationLoading) {
         loadMessages();
       }
-    }, [loadMessages, locationLoading])
+    }, [loadCrowds, loadMessages, locationLoading])
   );
 
   const handleBoost = async (item: Message, userLoc: Location) => {

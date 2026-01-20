@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, numeric, integer, timestamp, uniqueIndex, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, numeric, integer, timestamp, uniqueIndex, boolean, index } from 'drizzle-orm/pg-core';
 
 // Crowds table - time-limited groups (24 hours)
 export const crowds = pgTable('crowds', {
@@ -8,7 +8,10 @@ export const crowds = pgTable('crowds', {
   isOpen: boolean('is_open').default(true).notNull(), // Open vs Closed
   createdAt: timestamp('created_at').defaultNow().notNull(),
   expiresAt: timestamp('expires_at').notNull(), // createdAt + 24 hours
-});
+}, (t) => ({
+  ownerIdIdx: index('crowds_owner_id_idx').on(t.ownerId),
+  expiresAtIdx: index('crowds_expires_at_idx').on(t.expiresAt),
+}));
 
 // Crowd memberships table
 export const crowdMemberships = pgTable('crowd_memberships', {
@@ -32,7 +35,11 @@ export const messages = pgTable('messages', {
   ownerId: uuid('owner_id'), // Nullable for existing messages, enforced logic in app
   boostCount: integer('boost_count').default(0).notNull(),
   crowdId: uuid('crowd_id').references(() => crowds.id, { onDelete: 'set null' }), // NULL = global feed
-});
+}, (t) => ({
+  ownerIdIdx: index('messages_owner_id_idx').on(t.ownerId),
+  expiresAtIdx: index('messages_expires_at_idx').on(t.expiresAt),
+  crowdIdIdx: index('messages_crowd_id_idx').on(t.crowdId),
+}));
 
 export const messageBoosts = pgTable('message_boosts', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -43,4 +50,5 @@ export const messageBoosts = pgTable('message_boosts', {
   boostedAt: timestamp('boosted_at').defaultNow().notNull(),
 }, (t) => ({
   uniqueUserBoost: uniqueIndex('unique_user_boost').on(t.messageId, t.userId),
+  messageIdIdx: index('message_boosts_message_id_idx').on(t.messageId),
 }));
