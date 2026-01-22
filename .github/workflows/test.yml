@@ -1,0 +1,83 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-packages:
+    name: Test Packages (shared, api)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: Test packages/shared
+        run: pnpm --filter @repo/shared test:coverage
+      - name: Test packages/api
+        run: pnpm --filter @repo/api test:coverage
+
+  test-server:
+    name: Test Server (Integration)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: Test apps/server
+        run: pnpm --filter @app/server test:coverage
+
+  test-devtools:
+    name: Test Devtools (React)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: Test apps/devtools
+        run: pnpm --filter devtools test:coverage
+
+  build:
+    name: Build All
+    runs-on: ubuntu-latest
+    needs: [test-packages, test-server, test-devtools]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: Build packages
+        run: pnpm --filter @repo/shared build && pnpm --filter @repo/api build
+      - name: Build server
+        run: pnpm --filter @app/server build
+      - name: Build devtools
+        run: pnpm --filter devtools build

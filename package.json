@@ -10,7 +10,9 @@
     "dev:mobile": "pnpm --filter mobile start",
     "dev:tools": "pnpm --filter devtools dev",
     "server:view:db": "pnpm --filter server view:db",
-    "server:cleanup": "pnpm --filter server cleanup"
+    "server:cleanup": "pnpm --filter server cleanup",
+    "test": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
