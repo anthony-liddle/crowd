@@ -51,6 +51,8 @@ export const getMessages = async (params: LocationParams): Promise<Message[]> =>
     userId,
     sortBy: params.sortBy ?? 'nearest',
     crowdId: params.crowdId ?? undefined,
+    limit: 50,
+    offset: 0,
   });
 
   return dtos.map((dto) => {

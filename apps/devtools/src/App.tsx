@@ -1,4 +1,4 @@
-import { useState, useEffect, Component, ReactNode } from 'react';
+import { useState, useEffect, Component, type ReactNode } from 'react';
 import { CreateMessage } from './components/CreateMessage';
 import { Feed } from './components/Feed';
 import { Crowds } from './components/Crowds';
