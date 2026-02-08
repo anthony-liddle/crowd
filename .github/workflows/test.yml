@@ -22,9 +22,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
       - name: Test packages/shared
-        run: pnpm --filter @repo/shared test:coverage
+        run: pnpm --filter @repo/shared test
       - name: Test packages/api
-        run: pnpm --filter @repo/api test:coverage
+        run: pnpm --filter @repo/api test
 
   test-server:
     name: Test Server (Integration)
@@ -41,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install
       - name: Test apps/server
-        run: pnpm --filter @app/server test:coverage
+        run: pnpm --filter @app/server test
 
   test-devtools:
     name: Test Devtools (React)
@@ -58,7 +58,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install
       - name: Test apps/devtools
-        run: pnpm --filter devtools test:coverage
+        run: pnpm --filter devtools test
 
   build:
     name: Build All
