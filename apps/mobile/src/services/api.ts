@@ -70,6 +70,8 @@ export const getMessages = async (params?: FeedParams): Promise<Message[]> => {
       userId,
       sortBy: params?.sortBy ?? 'nearest',
       crowdId: params?.crowdId,
+      limit: 50,
+      offset: 0,
     });
 
     return dtos.map((dto) => {
