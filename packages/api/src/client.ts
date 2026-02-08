@@ -31,7 +31,7 @@ class ApiClient {
     method: 'GET' | 'POST',
     body?: unknown,
     timeoutMs = 30000,
-    responseSchema?: z.ZodType<T>
+    responseSchema?: z.ZodType<T, any, any>
   ): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
