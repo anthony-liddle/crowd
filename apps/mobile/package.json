@@ -20,7 +20,7 @@
     "@react-navigation/native": "^6.1.18",
     "@repo/api": "workspace:*",
     "@repo/shared": "workspace:*",
-    "expo": "^54.0.0",
+    "expo": "^55.0.5",
     "expo-constants": "~18.0.12",
     "expo-location": "~19.0.8",
     "expo-secure-store": "^15.0.8",
