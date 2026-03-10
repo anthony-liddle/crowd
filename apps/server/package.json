@@ -12,7 +12,12 @@
     "cleanup": "tsx src/scripts/cleanup-expired.ts",
     "test": "bash scripts/test-wrapper.sh",
     "test:watch": "vitest",
-    "test:coverage": "bash scripts/test-wrapper.sh --coverage"
+    "test:coverage": "bash scripts/test-wrapper.sh --coverage",
+    "test:ui": "vitest --ui",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/db tests/api",
+    "test:api": "vitest run tests/api",
+    "test:db": "vitest run tests/db"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
@@ -28,6 +33,7 @@
     "@types/pg": "^8.18.0",
     "@types/uuid": "^9.0.8",
     "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/ui": "^4.0.18",
     "drizzle-kit": "^0.31.9",
     "pino": "^10.3.1",
     "testcontainers": "^11.12.0",
