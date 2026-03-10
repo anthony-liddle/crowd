@@ -15,11 +15,7 @@ export default defineConfig({
     testTimeout: 120000, // 120s for container startup
     hookTimeout: 120000,
     pool: 'forks', // Better isolation for database tests
-    poolOptions: {
-      forks: {
-        singleFork: true, // Run tests sequentially to share container
-      },
-    },
+    maxWorkers: 1, // Run tests sequentially to share container
     // Ignore expected PostgreSQL connection termination errors during container shutdown
     dangerouslyIgnoreUnhandledErrors: true,
     coverage: {
