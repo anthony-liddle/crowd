@@ -49,8 +49,13 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim()) return;
-    if (!location) {
-      setError('Location not available');
+
+    const lat = parseFloat(manualLat);
+    const lng = parseFloat(manualLng);
+
+    // Allow submission if we have valid manual coordinates, even without device location
+    if (isNaN(lat) || isNaN(lng)) {
+      setError('Invalid coordinates. Please enter valid latitude and longitude.');
       return;
     }
 
@@ -58,14 +63,6 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
     setError(null);
 
     try {
-      const lat = parseFloat(manualLat);
-      const lng = parseFloat(manualLng);
-
-      if (isNaN(lat) || isNaN(lng)) {
-        setError('Invalid coordinates');
-        return;
-      }
-
       const payload: CreateMessagePayload = {
         text: text.trim(),
         duration,
@@ -226,8 +223,8 @@ export const CreateMessage: React.FC<CreateMessageProps> = ({ onSuccess }) => {
 
         <button
           type="submit"
-          disabled={isSubmitting || !location}
-          className={`mt-6 w-full py-4 rounded-xl flex items-center justify-center font-bold text-white transition-all ${isSubmitting || !location
+          disabled={isSubmitting || (!manualLat || !manualLng)}
+          className={`mt-6 w-full py-4 rounded-xl flex items-center justify-center font-bold text-white transition-all ${isSubmitting || (!manualLat || !manualLng)
             ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
             : 'bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20'
             }`}

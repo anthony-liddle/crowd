@@ -1,4 +1,34 @@
-import '@testing-library/jest-native/extend-expect';
+// Mock AsyncStorage with proper state tracking
+const mockAsyncStorage = (() => {
+  let store = {};
+  return {
+    getItem: jest.fn((key) => Promise.resolve(store[key] || null)),
+    setItem: jest.fn((key, value) => {
+      store[key] = value;
+      return Promise.resolve();
+    }),
+    removeItem: jest.fn((key) => {
+      delete store[key];
+      return Promise.resolve();
+    }),
+    multiRemove: jest.fn((keys) => {
+      keys.forEach((key) => delete store[key]);
+      return Promise.resolve();
+    }),
+    clear: jest.fn(() => {
+      store = {};
+      return Promise.resolve();
+    }),
+    getAllKeys: jest.fn(() => Promise.resolve(Object.keys(store))),
+    // Helper to reset store between tests
+    __reset: () => {
+      store = {};
+    },
+    __getStore: () => store,
+  };
+})();
+
+jest.mock('@react-native-async-storage/async-storage', () => mockAsyncStorage);
 
 // Mock expo-location
 jest.mock('expo-location', () => ({
@@ -8,66 +38,80 @@ jest.mock('expo-location', () => ({
   getCurrentPositionAsync: jest.fn(() =>
     Promise.resolve({
       coords: {
-        latitude: 37.7749,
-        longitude: -122.4194,
-        altitude: null,
+        latitude: 45.5152,
+        longitude: -122.6784,
         accuracy: 10,
-        altitudeAccuracy: null,
-        heading: null,
-        speed: null,
       },
       timestamp: Date.now(),
     })
   ),
-  watchPositionAsync: jest.fn(),
-  stopLocationUpdatesAsync: jest.fn(),
-}));
-
-// Mock AsyncStorage
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(() => Promise.resolve(null)),
-  setItem: jest.fn(() => Promise.resolve()),
-  removeItem: jest.fn(() => Promise.resolve()),
-  clear: jest.fn(() => Promise.resolve()),
-  getAllKeys: jest.fn(() => Promise.resolve([])),
-  multiGet: jest.fn(() => Promise.resolve([])),
-  multiSet: jest.fn(() => Promise.resolve()),
-  multiRemove: jest.fn(() => Promise.resolve()),
+  Accuracy: {
+    Lowest: 1,
+    Low: 2,
+    Balanced: 3,
+    High: 4,
+    Highest: 5,
+    BestForNavigation: 6,
+  },
 }));
 
 // Mock expo-secure-store
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(() => Promise.resolve(null)),
-  setItemAsync: jest.fn(() => Promise.resolve()),
-  deleteItemAsync: jest.fn(() => Promise.resolve()),
+const mockSecureStore = (() => {
+  let store = {};
+  return {
+    getItemAsync: jest.fn((key) => Promise.resolve(store[key] || null)),
+    setItemAsync: jest.fn((key, value) => {
+      store[key] = value;
+      return Promise.resolve();
+    }),
+    deleteItemAsync: jest.fn((key) => {
+      delete store[key];
+      return Promise.resolve();
+    }),
+    __reset: () => {
+      store = {};
+    },
+  };
+})();
+
+jest.mock('expo-secure-store', () => mockSecureStore);
+
+// Mock react-native-get-random-values (uuid dependency)
+jest.mock('react-native-get-random-values', () => ({}));
+
+// Mock uuid
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => 'mock-uuid-' + Math.random().toString(36).substr(2, 9)),
 }));
 
-// Mock react-native-toast-message
-jest.mock('react-native-toast-message', () => ({
-  show: jest.fn(),
-  hide: jest.fn(),
+// Mock react-native StyleSheet and other commonly used APIs
+jest.mock('react-native', () => ({
+  StyleSheet: {
+    create: (styles) => styles,
+    flatten: (style) => style,
+  },
+  Platform: {
+    OS: 'ios',
+    select: (obj) => obj.ios,
+  },
+  Dimensions: {
+    get: () => ({ width: 375, height: 812 }),
+  },
 }));
 
-// Mock react-navigation
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: jest.fn(),
-    goBack: jest.fn(),
-  }),
-  useFocusEffect: jest.fn((callback) => callback()),
-  useRoute: () => ({
-    params: {},
-  }),
-}));
-
-// Mock NativeWind
+// Mock nativewind to avoid react-native import issues
 jest.mock('nativewind', () => ({
-  styled: (Component) => Component,
+  styled: (component) => component,
+  useColorScheme: () => 'light',
 }));
 
-// Silence console warnings in tests
-global.console = {
-  ...console,
-  warn: jest.fn(),
-  error: jest.fn(),
-};
+// Reset mocks before each test
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockAsyncStorage.__reset();
+  mockSecureStore.__reset();
+});
+
+// Export for tests that need direct access
+global.__mockAsyncStorage = mockAsyncStorage;
+global.__mockSecureStore = mockSecureStore;
