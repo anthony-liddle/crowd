@@ -22,8 +22,8 @@
   "dependencies": {
     "@fastify/cors": "^11.0.0",
     "@repo/shared": "workspace:*",
-    "drizzle-orm": "^0.45.1",
-    "fastify": "^5.8.3",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.8.4",
     "pg": "^8.20.0",
     "zod": "^3.23.8"
   },
