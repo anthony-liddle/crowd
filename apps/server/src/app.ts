@@ -231,12 +231,12 @@ export function buildApp(): FastifyInstance {
         code: err.code,
         detail: err.detail,
       });
-      return {
+      return reply.status(500).send({
         error: 'Internal Server Error',
         message: err.message,
         detail: err.detail,
         code: err.code,
-      };
+      });
     }
   });
 
@@ -298,12 +298,12 @@ export function buildApp(): FastifyInstance {
         code: err.code,
         detail: err.detail,
       });
-      return {
+      return reply.status(500).send({
         error: 'Internal Server Error',
         message: err.message,
         detail: err.detail,
         code: err.code,
-      };
+      });
     }
   });
 
@@ -426,13 +426,12 @@ export function buildApp(): FastifyInstance {
         code: err.code,
         detail: err.detail,
       });
-      // Send detailed error to client for debugging
-      return {
+      return reply.status(500).send({
         error: 'Internal Server Error',
         message: err.message,
-        detail: err.detail, // Postgres error detail
-        code: err.code, // Postgres error code
-      };
+        detail: err.detail,
+        code: err.code,
+      });
     }
   });
 

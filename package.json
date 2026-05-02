@@ -4,6 +4,8 @@
   "description": "A location-based ephemeral messaging platform with mobile app and server",
   "private": true,
   "scripts": {
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
     "dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter mobile start\"",
     "build": "pnpm -r build",
     "dev:server": "pnpm --filter server dev",
