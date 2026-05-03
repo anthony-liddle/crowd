@@ -38,10 +38,12 @@ const baseUrl = getBaseUrl();
 api.setBaseUrl(baseUrl);
 console.log('API Base URL set to:', baseUrl);
 
-// TODO: Get actual user location. Hardcoded to Portland, OR for now.
+// TODO: Get actual user location. Hardcoded to Aloha, OR (matches the seed
+// script's CENTER in apps/server/src/scripts/seed.ts) so the simulator's
+// default feed surfaces seeded messages.
 const DEFAULT_LOCATION = {
-  latitude: 45.5152,
-  longitude: -122.6784,
+  latitude: 45.46948,
+  longitude: -122.863,
 };
 
 interface LocationParams extends Location {

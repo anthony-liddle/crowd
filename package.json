@@ -10,6 +10,11 @@
   "scripts": {
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
+    "dev:up": "docker compose up -d",
+    "dev:down": "docker compose down",
+    "dev:logs": "docker compose logs -f server",
+    "dev:reset": "docker compose down -v",
+    "dev:seed": "pnpm --filter @app/server seed",
     "dev": "concurrently \"pnpm --filter @app/server dev\" \"pnpm --filter @app/mobile start\"",
     "build": "pnpm -r build",
     "dev:server": "pnpm --filter @app/server dev",

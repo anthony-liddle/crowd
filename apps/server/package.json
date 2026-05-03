@@ -11,6 +11,7 @@
     "migrate": "drizzle-kit migrate",
     "view:db": "drizzle-kit studio",
     "cleanup": "tsx src/scripts/cleanup-expired.ts",
+    "seed": "tsx src/scripts/seed.ts",
     "test": "bash scripts/test-wrapper.sh",
     "test:watch": "vitest",
     "test:coverage": "bash scripts/test-wrapper.sh --coverage",
