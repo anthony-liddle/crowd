@@ -4,6 +4,9 @@
   "description": "A location-based ephemeral messaging platform with mobile app and server",
   "private": true,
   "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=22.22.0"
+  },
   "scripts": {
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
