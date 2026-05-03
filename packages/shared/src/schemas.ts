@@ -4,8 +4,8 @@ export const PostMessageSchema = z.object({
   text: z.string().min(1).max(500), // text limited on the frontend
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
-  radiusMeters: z.number().int().positive().max(100000), // Max 100km
-  activeMinutes: z.number().int().positive().max(10080), // Max 7 days
+  radiusMeters: z.number().int().positive().max(5000), // Max 5km — matches the compose slider's REACH_MAX
+  activeMinutes: z.number().int().min(5).max(720), // Slider range: 5 minutes to 12 hours
   userId: z.string().uuid(),
   crowdId: z.string().uuid().optional(), // Optional - NULL = global feed
 });

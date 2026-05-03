@@ -132,8 +132,8 @@ async function seed() {
     { text: 'Free coffee at the library cart',        spot: SPOTS[1], activeMinutes: 5,   radiusMeters: 2000, createdAgoMs: 1 * MIN,  ownerId: USERS.alice, crowdName: null },
     // dist 4.60 km, radius 5 km → visible
     { text: 'Lost dog near the park — orange tag',    spot: SPOTS[3], activeMinutes: 60,  radiusMeters: 5000, createdAgoMs: 30 * MIN, ownerId: USERS.bob,   crowdName: null },
-    // dist 5.18 km, radius 6 km → visible
-    { text: 'Open mic tonight at the brewery',        spot: SPOTS[4], activeMinutes: 480, radiusMeters: 6000, createdAgoMs: 2 * HOUR, ownerId: USERS.carol, crowdName: null },
+    // dist 4.60 km, radius 5 km → visible (colocated with "Lost dog" at Nature Park; brewery is the message content, not the spot)
+    { text: 'Open mic tonight at the brewery',        spot: SPOTS[3], activeMinutes: 480, radiusMeters: 5000, createdAgoMs: 2 * HOUR, ownerId: USERS.carol, crowdName: null },
     // dist 8.00 km, radius 1 km → OUT OF RANGE (deliberate radius-filter demo)
     { text: 'Anyone got a phone charger?',            spot: SPOTS[7], activeMinutes: 60,  radiusMeters: 1000, createdAgoMs: 30 * MIN, ownerId: USERS.eve,   crowdName: null },
     // ---------- Aloha Book Club (anchor: Aloha Community Library) ----------

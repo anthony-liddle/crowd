@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, FlatList, RefreshControl } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
@@ -40,11 +40,33 @@ export const FeedScreen: React.FC = () => {
   const [sheetMessage, setSheetMessage] = useState<Message | null>(null);
   const { markRelayed } = useRelaySettings();
 
-  // Tick `now` so rings + age labels stay current.
+  // Filter out posts that hit zero — server already excludes them on the next
+  // refetch, but state lingers between fetches. Without this, a post sits at
+  // "0s" until the next refresh.
+  const visibleMessages = useMemo(
+    () => messages.filter((m) => new Date(m.expiresAt).getTime() > now),
+    [messages, now],
+  );
+
+  // Adaptive tick rate: 1s when any visible post is under a minute, 10s under
+  // 5 minutes, 30s otherwise. The bucket — not `now` — drives reconfiguration,
+  // so we only tear down setInterval when the rate actually needs to change.
+  const tickInterval = useMemo(() => {
+    if (visibleMessages.length === 0) return 30_000;
+    const minMsRemaining = Math.min(
+      ...visibleMessages.map((m) => new Date(m.expiresAt).getTime() - now),
+    );
+    if (minMsRemaining < 60_000) return 1_000;
+    if (minMsRemaining < 300_000) return 10_000;
+    return 30_000;
+  }, [visibleMessages, now]);
+
+  // Tick `now` so rings + age labels stay current. Cadence comes from the
+  // bucket above.
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
+    const id = setInterval(() => setNow(Date.now()), tickInterval);
     return () => clearInterval(id);
-  }, []);
+  }, [tickInterval]);
 
   useEffect(() => {
     cleanupExpiredRecords().catch(console.error);
@@ -138,7 +160,7 @@ export const FeedScreen: React.FC = () => {
     ...crowds.map(c => ({ id: c.id, name: c.name })),
   ];
 
-  const meta = `${messages.length} ${messages.length === 1 ? 'post' : 'posts'} near you`;
+  const meta = `${visibleMessages.length} ${visibleMessages.length === 1 ? 'post' : 'posts'} near you`;
 
   return (
     <View className="flex-1 bg-paper dark:bg-paper-d">
@@ -154,7 +176,7 @@ export const FeedScreen: React.FC = () => {
 
       <FlatList
         className="flex-1"
-        data={messages}
+        data={visibleMessages}
         renderItem={({ item }) => (
           <PostCard
             message={item}
