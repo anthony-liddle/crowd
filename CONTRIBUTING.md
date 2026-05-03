@@ -8,7 +8,7 @@ Thank you for your interest in contributing to Crowd! This document provides gui
 2. Clone your fork: `git clone https://github.com/yourusername/crowd.git`
 3. Install dependencies: `pnpm install`
 4. Set up the database: `docker-compose up -d`
-5. Run migrations: `pnpm --filter server migrate`
+5. Run migrations: `pnpm --filter @app/server migrate`
 6. Start development: `pnpm dev`
 
 ## Development Workflow
@@ -56,7 +56,7 @@ Follow conventional commits format:
 - Test on both iOS and Android when making mobile changes
 - Verify API endpoints work correctly
 - Check database migrations run successfully
-- Ensure no TypeScript errors: `pnpm --filter server exec tsc --noEmit`
+- Ensure no TypeScript errors across the monorepo: `pnpm -r typecheck`
 
 ## Project Structure
 
@@ -100,11 +100,37 @@ pnpm dev:mobile
 pnpm server:view:db
 
 # Generate new migration
-pnpm --filter server generate
+pnpm --filter @app/server generate
 
 # Run migrations
-pnpm --filter server migrate
+pnpm --filter @app/server migrate
 ```
+
+After running `generate`, **rename the resulting migration file** so its name describes what it does, e.g. `0003_reconcile_indexes.sql` rather than Drizzle's auto-generated `0003_uneven_mercury.sql`. Migration filenames are part of the deploy timeline and should read like changelog entries. Update the matching `tag` in `apps/server/drizzle/meta/_journal.json` to keep Drizzle's bookkeeping in sync with the rename.
+
+## Don't delete these without reading this
+
+Two pieces of build configuration look unused but are load-bearing for the React Native bundle. They look unmotivated because their failure mode is at *runtime in Metro*, not at install time:
+
+### `pnpm.packageExtensions` in `package.json`
+
+Adds missing peer dependency declarations for several packages
+(`@react-native-community/slider`, `@expo-google-fonts/*`, `nativewind`).
+Without these, pnpm's strict peer resolution drops the packages into a
+different node_modules layout, and Metro can't find React/React Native at
+runtime. Removing this block produces "Unable to resolve module react"-style
+errors when the mobile app starts.
+
+### `public-hoist-pattern[]=*@babel/*` in `.npmrc`
+
+Forces `@babel/generator`, `@babel/types`, `@babel/parser`, and
+`@babel/traverse` to be hoisted to the root `node_modules`. Metro and
+Babel's own internals require these to be resolvable from arbitrary
+locations during the bundle process. Without these lines the mobile
+bundle fails with "Cannot find module @babel/..." errors that look
+unrelated to pnpm.
+
+If you're tempted to clean either of these up, run `pnpm --filter @app/mobile start` first and confirm the bundle still completes — and also test on a fresh `node_modules` (delete and reinstall), because hoisting decisions stick.
 
 ## Reporting Issues
 

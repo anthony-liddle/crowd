@@ -53,7 +53,7 @@ docker-compose up -d
 5. Run database migrations:
 
 ```bash
-pnpm --filter server migrate
+pnpm --filter @app/server migrate
 ```
 
 ## Running the Project
@@ -75,7 +75,7 @@ This uses the `concurrently` package to stream output from both the server and m
 ```bash
 pnpm dev:server
 # OR
-pnpm --filter server dev
+pnpm --filter @app/server dev
 ```
 
 The server runs on Fastify with Drizzle ORM.
@@ -86,7 +86,7 @@ The server runs on Fastify with Drizzle ORM.
 ```bash
 pnpm dev:mobile
 # OR
-pnpm --filter mobile start
+pnpm --filter @app/mobile start
 ```
 
 The mobile app is an Expo project.
@@ -101,7 +101,7 @@ Typically used for debugging location-based features and seeding data.
 ```bash
 pnpm dev:tools
 # OR
-pnpm --filter devtools dev
+pnpm --filter @app/devtools dev
 ```
 
 - **URL**: http://localhost:5173 (default)

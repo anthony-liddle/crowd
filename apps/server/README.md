@@ -53,7 +53,7 @@ The server includes a cleanup script that removes expired data from the database
 ```bash
 pnpm cleanup
 # OR
-pnpm --filter server cleanup
+pnpm --filter @app/server cleanup
 ```
 
 **Scheduled (Cron):**
@@ -64,7 +64,7 @@ Set up a cron job to run the cleanup script periodically. Example running every 
 crontab -e
 
 # Add this line (adjust path as needed)
-0 * * * * cd /path/to/crowd && pnpm --filter server cleanup
+0 * * * * cd /path/to/crowd && pnpm --filter @app/server cleanup
 ```
 
 **Recommended Frequency:**

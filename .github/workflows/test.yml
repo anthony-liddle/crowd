@@ -15,7 +15,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install
@@ -32,7 +32,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install
@@ -47,23 +47,57 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install
       - name: Test apps/devtools
-        run: pnpm --filter devtools test
+        run: pnpm --filter @app/devtools test
 
-  build:
-    name: Build All
+  typecheck:
+    name: Typecheck (all workspaces)
     runs-on: ubuntu-latest
-    needs: [test-packages, test-server, test-devtools]
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: Build packages (so workspace consumers can resolve types)
+        run: pnpm --filter @repo/shared build && pnpm --filter @repo/api build
+      - name: Typecheck all workspaces
+        run: pnpm -r typecheck
+
+  test-mobile:
+    name: Test Mobile (Jest + Typecheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: Test apps/mobile
+        run: pnpm --filter @app/mobile test
+      - name: Typecheck apps/mobile
+        run: pnpm --filter @app/mobile exec tsc --noEmit
+
+  build:
+    name: Build All
+    runs-on: ubuntu-latest
+    needs: [test-packages, test-server, test-devtools, test-mobile, typecheck]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install
@@ -72,4 +106,4 @@ jobs:
       - name: Build server
         run: pnpm --filter @app/server build
       - name: Build devtools
-        run: pnpm --filter devtools build
+        run: pnpm --filter @app/devtools build

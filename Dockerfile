@@ -33,8 +33,11 @@ EXPOSE 8080
 # Start the server
 WORKDIR /app/apps/server
 
-# Create a startup script that runs migrations then starts the server
-RUN echo '#!/bin/sh\nset -e\npnpm migrate || echo "Migration failed, continuing..."\npnpm start' > /app/apps/server/start.sh && \
+# Create a startup script that runs migrations then starts the server.
+# A failed migration must abort startup (set -e + no `||` swallow). In Phase C
+# this will be split: migrations move to Fly.io's release_command and the start
+# command will run the server only.
+RUN echo '#!/bin/sh\nset -e\npnpm migrate\npnpm start' > /app/apps/server/start.sh && \
     chmod +x /app/apps/server/start.sh
 
 CMD ["/app/apps/server/start.sh"]
