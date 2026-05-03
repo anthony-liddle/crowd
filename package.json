@@ -19,5 +19,33 @@
   "devDependencies": {
     "concurrently": "^9.2.1",
     "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "packageExtensions": {
+      "@react-native-community/slider": {
+        "peerDependencies": {
+          "react": "*",
+          "react-native": "*"
+        }
+      },
+      "@expo-google-fonts/libre-baskerville": {
+        "peerDependencies": {
+          "react": "*",
+          "expo-font": "*"
+        }
+      },
+      "@expo-google-fonts/inter": {
+        "peerDependencies": {
+          "react": "*",
+          "expo-font": "*"
+        }
+      },
+      "nativewind": {
+        "peerDependencies": {
+          "react": "*",
+          "react-native": "*"
+        }
+      }
+    }
   }
 }

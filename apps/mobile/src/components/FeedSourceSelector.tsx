@@ -1,43 +1,42 @@
 import React from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  ActionSheetIOS,
   Platform,
-  TouchableOpacity,
-  ActionSheetIOS
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { useColorScheme } from 'nativewind';
 import { FeedSource } from '@/types';
 
 interface FeedSourceSelectorProps {
   sources: FeedSource[];
   selectedSource: FeedSource;
   onSourceChange: (source: FeedSource) => void;
-  label?: string;
-  globalLabel?: string;
   title?: string;
-  containerClassName?: string;
 }
 
-/**
- * FeedSourceSelector Component
- * Native-feeling dropdown to select between Global and Crowd feeds
- * Uses ActionSheet on iOS for a compact/premium look
- */
+const COLORS = {
+  light: { ink: '#1A1814', ember: '#B85A2C', paper2: '#EFE9DA' },
+  dark: { ink: '#EDE7D9', ember: '#D08454', paper2: '#1B1A15' },
+};
+
 export const FeedSourceSelector: React.FC<FeedSourceSelectorProps> = ({
   sources,
   selectedSource,
   onSourceChange,
-  label,
-  globalLabel = 'Global Feed',
-  title = 'Select Feed',
-  containerClassName = 'p-2 bg-white border-b border-gray-100',
+  title = 'Select feed',
 }) => {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const c = isDark ? COLORS.dark : COLORS.light;
+
   if (sources.length <= 1) return null;
 
   const handleIOSPress = () => {
-    const options = sources.map(s => s.id === null ? `🌍 ${globalLabel}` : `👥 ${s.name}`);
+    const options = sources.map((s) => s.name);
     options.push('Cancel');
 
     ActionSheetIOS.showActionSheetWithOptions(
@@ -45,61 +44,59 @@ export const FeedSourceSelector: React.FC<FeedSourceSelectorProps> = ({
         options,
         cancelButtonIndex: options.length - 1,
         title,
+        userInterfaceStyle: isDark ? 'dark' : 'light',
       },
       (buttonIndex) => {
-        if (buttonIndex < sources.length) {
+        if (buttonIndex !== undefined && buttonIndex < sources.length) {
           onSourceChange(sources[buttonIndex]);
         }
-      }
+      },
     );
   };
 
-  const currentLabel = selectedSource.id === null ? `🌍 ${globalLabel}` : `👥 ${selectedSource.name}`;
-
   if (Platform.OS === 'ios') {
     return (
-      <View className={containerClassName}>
-        {label && (
-          <Text className="text-sm font-semibold text-gray-700 mb-2">
-            {label}
-          </Text>
-        )}
-        <TouchableOpacity
+      <View className="px-screen-x" style={{ marginBottom: 12 }}>
+        <Pressable
           onPress={handleIOSPress}
-          activeOpacity={0.7}
-          className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex-row justify-between items-center"
+          className="bg-paper-2 dark:bg-paper-2-d border border-rule dark:border-rule-d rounded-md flex-row justify-between items-center active:opacity-60"
+          style={{ paddingHorizontal: 12, paddingVertical: 10 }}
         >
-          <Text className="text-gray-900 font-medium text-base">
-            {currentLabel}
+          <Text
+            className="font-sans-medium text-ink dark:text-ink-d"
+            style={{ fontSize: 13 }}
+          >
+            {selectedSource.name}
           </Text>
-          <Text className="text-blue-500 text-xs">▼</Text>
-        </TouchableOpacity>
+          <Text
+            className="font-sans text-ember dark:text-ember-d"
+            style={{ fontSize: 11 }}
+          >
+            ▼
+          </Text>
+        </Pressable>
       </View>
     );
   }
 
   return (
-    <View className={containerClassName}>
-      {label && (
-        <Text className="text-sm font-semibold text-gray-700 mb-2">
-          {label}
-        </Text>
-      )}
-      <View className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
+    <View className="px-screen-x" style={{ marginBottom: 12 }}>
+      <View className="bg-paper-2 dark:bg-paper-2-d border border-rule dark:border-rule-d rounded-md overflow-hidden">
         <Picker
           selectedValue={selectedSource.id}
           onValueChange={(itemValue) => {
-            const selected = sources.find(s => s.id === itemValue);
+            const selected = sources.find((s) => s.id === itemValue);
             if (selected) onSourceChange(selected);
           }}
-          style={styles.androidPicker}
-          dropdownIconColor="#3B82F6"
+          style={[styles.androidPicker, { color: c.ink, backgroundColor: c.paper2 }]}
+          dropdownIconColor={c.ember}
         >
           {sources.map((source) => (
             <Picker.Item
               key={source.id || 'global'}
-              label={source.id === null ? `🌍 ${globalLabel}` : `👥 ${source.name}`}
+              label={source.name}
               value={source.id}
+              color={c.ink}
             />
           ))}
         </Picker>
@@ -112,5 +109,5 @@ const styles = StyleSheet.create({
   androidPicker: {
     height: 50,
     width: '100%',
-  }
+  },
 });

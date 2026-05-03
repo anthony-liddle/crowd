@@ -3,51 +3,72 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
-  Keyboard,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import Slider from '@react-native-community/slider';
-import Toast from 'react-native-toast-message';
 import { Controller, useForm } from 'react-hook-form';
+import Toast from 'react-native-toast-message';
+import { useColorScheme } from 'nativewind';
 import { createMessage, getMyCrowds } from '@/services/api';
 import { CreateMessagePayload, Crowd, FeedSource, TabNavigationProp } from '@/types';
-import { CharacterCounter } from '@/components/CharacterCounter';
-import { PageHeader } from '@/components/PageHeader';
-import { FeedSourceSelector } from '@/components/FeedSourceSelector';
-import { formatDuration } from '@/utils/formatters';
 import { useLocation } from '@/hooks/useLocation';
+import { ThemedSlider } from '@/components/ThemedSlider';
+import { ReachPreview } from '@/components/ReachPreview';
+import { PrimaryButton } from '@/components/Buttons';
+import { FeedSourceSelector } from '@/components/FeedSourceSelector';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { CharacterCounter } from '@/components/CharacterCounter';
+import { formatLifespan, formatReach } from '@/utils/formatters';
 
-/**
- * CreateMessageScreen Component
- * Form for creating new messages with validation
- */
+const MAX_TEXT_LENGTH = 120;
+const REACH_MIN = 0.1;
+const REACH_MAX = 5;
+const LIFESPAN_MIN = 5;
+const LIFESPAN_MAX = 720;
+
 interface FormData {
   text: string;
-  duration: number; // in minutes
-  distance: number; // in meters
+  reachKm: number;
+  lifespanMin: number;
 }
 
-const MIN_DURATION = 5; // 5 minutes
-const MAX_DURATION = 720; // 12 hours (720 minutes)
-const MIN_DISTANCE = 1000; // 1000 meters
-const MAX_DISTANCE = 5000; // 5000 meters
-const MAX_TEXT_LENGTH = 120;
+// Slider axis is 0..1; product values are km / min. Conversion is linear so
+// the thumb position matches the value's intuitive position. Snapping happens
+// in the position→value direction with a coarser grid above the breakpoint.
+//
+// Reach:    0.1-km steps under 1 km, 0.5-km steps from 1 km up.
+// Lifespan: 1-min steps under 60 min, 5-min steps from 60 min up.
+const sliderToReach = (s: number): number => {
+  const raw = REACH_MIN + s * (REACH_MAX - REACH_MIN);
+  if (raw < 1) return Math.round(raw * 10) / 10;
+  return Math.round(raw * 2) / 2;
+};
+const reachToSlider = (km: number): number =>
+  (km - REACH_MIN) / (REACH_MAX - REACH_MIN);
+
+const sliderToLifespan = (s: number): number => {
+  const raw = LIFESPAN_MIN + s * (LIFESPAN_MAX - LIFESPAN_MIN);
+  if (raw < 60) return Math.round(raw);
+  return Math.round(raw / 5) * 5;
+};
+const lifespanToSlider = (min: number): number =>
+  (min - LIFESPAN_MIN) / (LIFESPAN_MAX - LIFESPAN_MIN);
 
 export const CreateMessageScreen: React.FC = () => {
   const navigation = useNavigation<TabNavigationProp>();
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const placeholderColor = isDark ? '#5A554B' : '#A09B91';
+  const selectionColor = isDark ? '#D08454' : '#B85A2C';
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { location, errorMsg: locationError, loading: locationLoading } = useLocation();
 
-  // Crowd selector state
   const [crowds, setCrowds] = useState<Crowd[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<FeedSource>({ id: null, name: 'Everyone' });
 
-  // Load crowds for selector
   const loadCrowds = useCallback(async () => {
     try {
       const data = await getMyCrowds();
@@ -63,254 +84,206 @@ export const CreateMessageScreen: React.FC = () => {
     }, [loadCrowds])
   );
 
-  const {
-    control,
-    handleSubmit,
-    formState: { errors },
-    reset,
-    watch,
-  } = useForm<FormData>({
-    defaultValues: {
-      text: '',
-      duration: 60, // Default: 1 hour
-      distance: 2500, // Default: 2.5 km
-    },
+  const { control, handleSubmit, reset, watch } = useForm<FormData>({
+    defaultValues: { text: '', reachKm: 1, lifespanMin: 60 },
   });
 
-  const textValue = watch('text');
-  const durationValue = watch('duration');
-  const distanceValue = watch('distance');
+  const text = watch('text');
+  const reachKm = watch('reachKm');
+  const lifespanMin = watch('lifespanMin');
+  const charCount = text?.length ?? 0;
+  const isEmpty = (text ?? '').trim().length === 0;
 
-  /**
-   * Handle form submission
-   */
   const onSubmit = async (data: FormData) => {
     if (locationLoading) {
-      Toast.show({ type: 'info', text1: 'Please wait', text2: 'Getting location...' });
+      Toast.show({ type: 'info', text1: 'Locating you', text2: 'Try again in a moment.' });
       return;
     }
-
-    if (!location && !locationError) {
-      // Should wait for location...
-      return;
-    }
-
     if (locationError) {
-      Toast.show({ type: 'error', text1: 'Location Error', text2: locationError });
+      Toast.show({ type: 'error', text1: 'Location error', text2: locationError });
       return;
     }
-
     if (data.text.trim().length === 0) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Message text cannot be empty',
-      });
-      return;
-    }
-
-    if (data.text.length > MAX_TEXT_LENGTH) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: `Message must be ${MAX_TEXT_LENGTH} characters or less`,
-      });
+      Toast.show({ type: 'error', text1: 'Empty post', text2: 'Write something first.' });
       return;
     }
 
     setIsSubmitting(true);
-
     try {
       const payload: CreateMessagePayload = {
         text: data.text.trim(),
-        duration: Math.round(data.duration),
-        distance: parseFloat(data.distance.toFixed(1)),
+        duration: Math.round(data.lifespanMin),
+        distance: Math.round(data.reachKm * 1000),
       };
-
-      await createMessage(payload, location ? {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        crowdId: selectedTarget.id || undefined,
-      } : undefined);
-
-      // Show success toast
-      Toast.show({
-        type: 'success',
-        text1: 'Success!',
-        text2: 'Your message has been posted',
-        position: 'top',
-      });
-
-      // Navigate back to feed
+      await createMessage(
+        payload,
+        location
+          ? {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              crowdId: selectedTarget.id || undefined,
+            }
+          : undefined
+      );
+      Toast.show({ type: 'success', text1: 'Posted', text2: 'It’s out there.' });
       setTimeout(() => {
         navigation.navigate('Feed');
-
-        // Clear form
         reset();
-      }, 500);
+      }, 400);
     } catch (error) {
       console.error('Error creating message:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to create message. Please try again.',
-      });
+      Toast.show({ type: 'error', text1: 'Failed to post', text2: 'Try again.' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const submitDisabled = isSubmitting || isEmpty;
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-gray-50"
+      className="flex-1 bg-paper dark:bg-paper-d"
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View className="flex-1">
-          <PageHeader title="Create Post" />
-          <ScrollView
-            contentContainerStyle={{ paddingBottom: 40, }}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            className="px-4 pt-4"
-          >
-            {/* Post Target Selector */}
-            <FeedSourceSelector
-              sources={[
-                { id: null, name: 'Everyone' },
-                ...crowds.map(c => ({ id: c.id, name: c.name }))
-              ]}
-              selectedSource={selectedTarget}
-              onSourceChange={setSelectedTarget}
-              label="Post to"
-              globalLabel="Everyone (Global)"
-              title="Post to..."
-              containerClassName="mb-6"
-            />
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
+        <ScreenHeader title="New post" />
 
-            {/* Message Text Input */}
-            <View className="mb-6">
-              <View className="flex-row justify-between items-center mb-2">
-                <Text className="text-sm font-semibold text-gray-700">
-                  Message
-                </Text>
-                <CharacterCounter
-                  current={textValue?.length || 0}
-                  limit={MAX_TEXT_LENGTH}
+        <FeedSourceSelector
+          sources={[
+            { id: null, name: 'Everyone' },
+            ...crowds.map((c) => ({ id: c.id, name: c.name })),
+          ]}
+          selectedSource={selectedTarget}
+          onSourceChange={setSelectedTarget}
+        />
+
+        <View className="px-screen-x" style={{ gap: 18, marginTop: 14 }}>
+          {/* Compose */}
+          <View className="pb-3 border-b border-rule dark:border-rule-d">
+            <Controller
+              control={control}
+              name="text"
+              rules={{ maxLength: MAX_TEXT_LENGTH }}
+              render={({ field: { onChange, value } }) => (
+                <TextInput
+                  placeholder="What do you want to say?"
+                  placeholderTextColor={placeholderColor}
+                  selectionColor={selectionColor}
+                  multiline
+                  value={value}
+                  onChangeText={onChange}
+                  maxLength={MAX_TEXT_LENGTH}
+                  className="font-serif text-compose text-ink dark:text-ink-d"
+                  style={{ minHeight: 80, textAlignVertical: 'top' }}
                 />
-              </View>
-              <Controller
-                control={control}
-                name="text"
-                rules={{
-                  required: 'Message text is required',
-                  maxLength: {
-                    value: MAX_TEXT_LENGTH,
-                    message: `Message must be ${MAX_TEXT_LENGTH} characters or less`,
-                  },
-                }}
-                render={({ field: { onChange, value } }) => (
-                  <TextInput
-                    className="bg-white border border-gray-300 rounded-lg p-4 text-base text-gray-900 min-h-[100px]"
-                    placeholder="What's on your mind?"
-                    placeholderTextColor="#9CA3AF"
-                    multiline
-                    numberOfLines={4}
-                    value={value}
-                    onChangeText={onChange}
-                    maxLength={MAX_TEXT_LENGTH}
-                    style={{ textAlignVertical: 'top' }}
-                  />
-                )}
-              />
-              {errors.text && (
-                <Text className="text-red-500 text-xs mt-1">
-                  {errors.text.message}
-                </Text>
               )}
-            </View>
+            />
+            <CharacterCounter
+              current={charCount}
+              limit={MAX_TEXT_LENGTH}
+              style={{ marginTop: 6 }}
+            />
+          </View>
 
-            {/* Duration Slider */}
-            <View className="mb-6">
-              <View className="flex-row justify-between items-center mb-2">
-                <Text className="text-sm font-semibold text-gray-700">
-                  Active Duration
-                </Text>
-                <Text className="text-sm font-semibold text-blue-600">
-                  {formatDuration(Math.round(durationValue || 60))}
-                </Text>
-              </View>
-              <Controller
-                control={control}
-                name="duration"
-                render={({ field: { onChange, value } }) => (
-                  <View className="bg-white rounded-lg p-4 border border-gray-300">
-                    <Slider
-                      minimumValue={MIN_DURATION}
-                      maximumValue={MAX_DURATION}
-                      step={5}
-                      value={value}
-                      onValueChange={onChange}
-                      minimumTrackTintColor="#3B82F6"
-                      maximumTrackTintColor="#E5E7EB"
-                      thumbTintColor="#3B82F6"
-                    />
-                    <View className="flex-row justify-between mt-2">
-                      <Text className="text-xs text-gray-500">{MIN_DURATION}m</Text>
-                      <Text className="text-xs text-gray-500">{MAX_DURATION / 60}h</Text>
-                    </View>
-                  </View>
-                )}
-              />
-            </View>
-
-            {/* Distance Slider */}
-            <View className="mb-6">
-              <View className="flex-row justify-between items-center mb-2">
-                <Text className="text-sm font-semibold text-gray-700">
-                  Distance Radius
-                </Text>
-                <Text className="text-sm font-semibold text-blue-600">
-                  {(distanceValue / 1000 || 2500 / 1000).toFixed(1)} km
-                </Text>
-              </View>
-              <Controller
-                control={control}
-                name="distance"
-                render={({ field: { onChange, value } }) => (
-                  <View className="bg-white rounded-lg p-4 border border-gray-300">
-                    <Slider
-                      minimumValue={MIN_DISTANCE}
-                      maximumValue={MAX_DISTANCE}
-                      step={0.1}
-                      value={value}
-                      onValueChange={onChange}
-                      minimumTrackTintColor="#3B82F6"
-                      maximumTrackTintColor="#E5E7EB"
-                      thumbTintColor="#3B82F6"
-                    />
-                    <View className="flex-row justify-between mt-2">
-                      <Text className="text-xs text-gray-500">{MIN_DISTANCE / 1000} km</Text>
-                      <Text className="text-xs text-gray-500">{MAX_DISTANCE / 1000} km</Text>
-                    </View>
-                  </View>
-                )}
-              />
-            </View>
-
-            {/* Submit Button */}
-            <TouchableOpacity
-              onPress={handleSubmit(onSubmit)}
-              disabled={isSubmitting}
-              className={`bg-blue-600 rounded-lg p-4 items-center ${isSubmitting ? 'opacity-50' : ''}`}
+          {/* Reach + lifespan preview */}
+          <View>
+            <ReachPreview reachKm={reachKm} lifespanMin={lifespanMin} />
+            <View
+              className="flex-row justify-between"
+              style={{ marginTop: 8 }}
             >
-              <Text className="text-white font-semibold text-base">
-                {isSubmitting ? 'Posting...' : 'Post Message'}
+              <Text className="font-sans text-meta text-dust dark:text-dust-d">
+                Reach{' '}
+                <Text className="font-sans-medium text-ink dark:text-ink-d">
+                  {formatReach(reachKm)}
+                </Text>
               </Text>
-            </TouchableOpacity>
-          </ScrollView>
+              <Text className="font-sans text-meta text-dust dark:text-dust-d">
+                Lifespan{' '}
+                <Text className="font-sans-medium text-ink dark:text-ink-d">
+                  {formatLifespan(lifespanMin)}
+                </Text>
+              </Text>
+            </View>
+          </View>
+
+          {/* Reach slider */}
+          <View>
+            <View
+              className="flex-row justify-between"
+              style={{ marginBottom: 4 }}
+            >
+              <Text className="font-sans text-meta text-dust dark:text-dust-d">
+                Reach
+              </Text>
+              <Text className="font-sans-medium text-meta text-ink dark:text-ink-d">
+                {formatReach(reachKm)}
+              </Text>
+            </View>
+            <Controller
+              control={control}
+              name="reachKm"
+              render={({ field: { onChange, value } }) => (
+                <ThemedSlider
+                  minimumValue={0}
+                  maximumValue={1}
+                  value={reachToSlider(value)}
+                  onValueChange={(s) => onChange(sliderToReach(s))}
+                />
+              )}
+            />
+          </View>
+
+          {/* Lifespan slider */}
+          <View>
+            <View
+              className="flex-row justify-between"
+              style={{ marginBottom: 4 }}
+            >
+              <Text className="font-sans text-meta text-dust dark:text-dust-d">
+                Lifespan
+              </Text>
+              <Text className="font-sans-medium text-meta text-ink dark:text-ink-d">
+                {formatLifespan(lifespanMin)}
+              </Text>
+            </View>
+            <Controller
+              control={control}
+              name="lifespanMin"
+              render={({ field: { onChange, value } }) => (
+                <ThemedSlider
+                  minimumValue={0}
+                  maximumValue={1}
+                  value={lifespanToSlider(value)}
+                  onValueChange={(s) => onChange(sliderToLifespan(s))}
+                />
+              )}
+            />
+          </View>
+
+          {/* Send block */}
+          <View style={{ marginTop: 6 }}>
+            <View style={{ opacity: submitDisabled ? 0.5 : 1 }}>
+              <PrimaryButton
+                label={isSubmitting ? 'Posting…' : 'Post'}
+                onPress={handleSubmit(onSubmit)}
+                disabled={submitDisabled}
+              />
+            </View>
+            <Text
+              className="font-sans text-meta text-dust dark:text-dust-d"
+              style={{ marginTop: 10, textAlign: 'center' }}
+            >
+              No account &middot; No record after expiration
+            </Text>
+          </View>
         </View>
-      </TouchableWithoutFeedback>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };

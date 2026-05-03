@@ -1,6 +1,5 @@
 const { getDefaultConfig } = require('expo/metro-config');
-
-/** @type {import('expo/metro-config').MetroConfig} */
+const { withNativeWind } = require('nativewind/metro');
 const path = require('path');
 
 const config = getDefaultConfig(__dirname);
@@ -13,5 +12,4 @@ config.resolver.nodeModulesPaths = [
   path.resolve(__dirname, 'node_modules'),
 ];
 
-module.exports = config;
-
+module.exports = withNativeWind(config, { input: './global.css' });

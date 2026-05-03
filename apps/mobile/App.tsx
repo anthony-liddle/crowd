@@ -1,50 +1,52 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useColorScheme } from 'nativewind';
+import {
+  useFonts,
+  LibreBaskerville_400Regular,
+  LibreBaskerville_400Regular_Italic,
+} from '@expo-google-fonts/libre-baskerville';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+} from '@expo-google-fonts/inter';
 import Toast from 'react-native-toast-message';
-import { View, Text } from 'react-native';
 import { TabNavigator } from './src/navigation/TabNavigator';
 import { toastConfig } from './src/components/ToastConfig';
+import { Splash } from './src/components/Splash';
 import './global.css';
 
-/**
- * App Component
- * Root component with splash screen and navigation setup
- */
 export default function App() {
-  const [isSplashVisible, setIsSplashVisible] = useState(true);
+  const [loaded] = useFonts({
+    LibreBaskerville_400Regular,
+    LibreBaskerville_400Regular_Italic,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+  });
+  const { colorScheme } = useColorScheme();
 
-  useEffect(() => {
-    // Show splash screen for 2 seconds
-    const timer = setTimeout(() => {
-      setIsSplashVisible(false);
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (isSplashVisible) {
+  if (!loaded) {
     return (
-      <View className="flex-1 justify-center items-center bg-white">
-        <StatusBar style="auto" />
-        {/* Note: In a real app, you'd use expo-splash-screen and proper image loading */}
-        <View className="justify-center items-center">
-          <Text className="text-[80px] mb-4">📣</Text>
-          <Text className="text-4xl font-bold text-gray-900 mb-2">Crowd</Text>
-          <Text className="text-lg text-gray-600">There’s safety in numbers</Text>
-        </View>
+      <View className={`flex-1 ${colorScheme === 'dark' ? 'dark' : ''}`}>
+        <Splash />
       </View>
     );
   }
 
   return (
-    <SafeAreaProvider>
-      <NavigationContainer>
-        <TabNavigator />
-        <StatusBar style="auto" />
-        <Toast config={toastConfig} />
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <View className={`flex-1 ${colorScheme === 'dark' ? 'dark' : ''}`}>
+      <SafeAreaProvider>
+        <NavigationContainer>
+          <TabNavigator />
+          <StatusBar style="auto" />
+          <Toast config={toastConfig} />
+        </NavigationContainer>
+      </SafeAreaProvider>
+    </View>
   );
 }

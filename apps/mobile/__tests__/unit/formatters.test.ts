@@ -2,7 +2,7 @@ import {
   formatTimeLeft,
   formatTimestamp,
   formatDistance,
-  formatDuration,
+  formatLifespan,
   formatTimeRemaining,
 } from '../../src/utils/formatters';
 
@@ -88,20 +88,26 @@ describe('formatDistance', () => {
   });
 });
 
-describe('formatDuration', () => {
+describe('formatLifespan', () => {
   it('returns minutes when less than 60', () => {
-    expect(formatDuration(30)).toBe('30m');
-    expect(formatDuration(45)).toBe('45m');
+    expect(formatLifespan(30)).toBe('30 min');
+    expect(formatLifespan(45)).toBe('45 min');
+    expect(formatLifespan(59)).toBe('59 min');
   });
 
-  it('returns hours only when minutes is 0', () => {
-    expect(formatDuration(60)).toBe('1h');
-    expect(formatDuration(120)).toBe('2h');
+  it('uses singular hour at exactly 60 minutes', () => {
+    expect(formatLifespan(60)).toBe('1 hour');
   });
 
-  it('returns hours and minutes combined', () => {
-    expect(formatDuration(90)).toBe('1h 30m');
-    expect(formatDuration(150)).toBe('2h 30m');
+  it('uses plural hours for multiple exact hours', () => {
+    expect(formatLifespan(120)).toBe('2 hours');
+    expect(formatLifespan(720)).toBe('12 hours');
+  });
+
+  it('combines hours and minutes when remainder is non-zero', () => {
+    expect(formatLifespan(65)).toBe('1 hour 5 min');
+    expect(formatLifespan(135)).toBe('2 hours 15 min');
+    expect(formatLifespan(270)).toBe('4 hours 30 min');
   });
 });
 
