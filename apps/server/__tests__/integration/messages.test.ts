@@ -153,7 +153,7 @@ describe('Messages API', () => {
       const userId = randomUuid();
       const message = validMessage({
         userId,
-        radiusMeters: 10000, // 10km radius
+        radiusMeters: 5000, // 5km radius (schema cap)
         ...portlandLocation,
       });
 
@@ -205,7 +205,7 @@ describe('Messages API', () => {
       const userId = randomUuid();
       const message = validMessage({
         userId,
-        radiusMeters: 100000, // 100km - we'll query from a closer location
+        radiusMeters: 5000, // schema cap; query offset reduced proportionally below
         latitude: portlandLocation.latitude,
         longitude: portlandLocation.longitude,
       });
@@ -216,8 +216,8 @@ describe('Messages API', () => {
         payload: message,
       });
 
-      // Query from a location 50km away (within radius)
-      const queryLat = portlandLocation.latitude + 0.45; // ~50km north
+      // Query from a location ~3km north (well inside the 5km radius)
+      const queryLat = portlandLocation.latitude + 0.027;
       const feedResponse = await app.inject({
         method: 'GET',
         url: `/messages/feed?latitude=${queryLat}&longitude=${portlandLocation.longitude}&userId=${userId}`,
@@ -226,9 +226,9 @@ describe('Messages API', () => {
       const feed = feedResponse.json();
       expect(feed.length).toBe(1);
 
-      // Distance should be approximately 50km
-      expect(feed[0].distance).toBeGreaterThan(45000);
-      expect(feed[0].distance).toBeLessThan(55000);
+      // Distance should be approximately 3km
+      expect(feed[0].distance).toBeGreaterThan(2700);
+      expect(feed[0].distance).toBeLessThan(3300);
     });
 
     it('should sort by nearest by default', async () => {
@@ -243,7 +243,7 @@ describe('Messages API', () => {
           text: 'Close message',
           latitude: portlandLocation.latitude + 0.001,
           longitude: portlandLocation.longitude,
-          radiusMeters: 10000,
+          radiusMeters: 5000,
         }),
       });
 
@@ -256,7 +256,7 @@ describe('Messages API', () => {
           text: 'Far message',
           latitude: portlandLocation.latitude + 0.01,
           longitude: portlandLocation.longitude,
-          radiusMeters: 10000,
+          radiusMeters: 5000,
         }),
       });
 
@@ -282,7 +282,7 @@ describe('Messages API', () => {
           userId,
           text: 'Later message',
           activeMinutes: 120,
-          radiusMeters: 10000,
+          radiusMeters: 5000,
         }),
       });
 
@@ -294,7 +294,7 @@ describe('Messages API', () => {
           userId,
           text: 'Sooner message',
           activeMinutes: 30,
-          radiusMeters: 10000,
+          radiusMeters: 5000,
         }),
       });
 
@@ -320,7 +320,7 @@ describe('Messages API', () => {
           payload: validMessage({
             userId,
             text: `Message ${i}`,
-            radiusMeters: 10000,
+            radiusMeters: 5000,
           }),
         });
       }
@@ -355,7 +355,7 @@ describe('Messages API', () => {
       const messageResponse = await app.inject({
         method: 'POST',
         url: '/messages',
-        payload: validMessage({ userId: ownerId, radiusMeters: 10000 }),
+        payload: validMessage({ userId: ownerId, radiusMeters: 5000 }),
       });
       const messageId = messageResponse.json().id;
 
@@ -391,7 +391,7 @@ describe('Messages API', () => {
       await app.inject({
         method: 'POST',
         url: '/messages',
-        payload: validMessage({ userId: ownerId, radiusMeters: 10000 }),
+        payload: validMessage({ userId: ownerId, radiusMeters: 5000 }),
       });
 
       // Check as owner
@@ -423,14 +423,14 @@ describe('Messages API', () => {
       await app.inject({
         method: 'POST',
         url: '/messages',
-        payload: validMessage({ userId, crowdId, text: 'Crowd message', radiusMeters: 10000 }),
+        payload: validMessage({ userId, crowdId, text: 'Crowd message', radiusMeters: 5000 }),
       });
 
       // Create global message
       await app.inject({
         method: 'POST',
         url: '/messages',
-        payload: validMessage({ userId, text: 'Global message', radiusMeters: 10000 }),
+        payload: validMessage({ userId, text: 'Global message', radiusMeters: 5000 }),
       });
 
       // Fetch global feed (no crowdId)
@@ -458,14 +458,14 @@ describe('Messages API', () => {
       await app.inject({
         method: 'POST',
         url: '/messages',
-        payload: validMessage({ userId, crowdId, text: 'Crowd message', radiusMeters: 10000 }),
+        payload: validMessage({ userId, crowdId, text: 'Crowd message', radiusMeters: 5000 }),
       });
 
       // Create global message
       await app.inject({
         method: 'POST',
         url: '/messages',
-        payload: validMessage({ userId, text: 'Global message', radiusMeters: 10000 }),
+        payload: validMessage({ userId, text: 'Global message', radiusMeters: 5000 }),
       });
 
       // Fetch crowd feed
@@ -489,7 +489,7 @@ describe('Messages API', () => {
       const messageResponse = await app.inject({
         method: 'POST',
         url: '/messages',
-        payload: validMessage({ userId: ownerId, radiusMeters: 10000 }),
+        payload: validMessage({ userId: ownerId, radiusMeters: 5000 }),
       });
       const messageId = messageResponse.json().id;
 
@@ -519,7 +519,7 @@ describe('Messages API', () => {
       const messageResponse = await app.inject({
         method: 'POST',
         url: '/messages',
-        payload: validMessage({ userId: ownerId, radiusMeters: 10000 }),
+        payload: validMessage({ userId: ownerId, radiusMeters: 5000 }),
       });
       const messageId = messageResponse.json().id;
 
@@ -542,7 +542,7 @@ describe('Messages API', () => {
       const messageResponse = await app.inject({
         method: 'POST',
         url: '/messages',
-        payload: validMessage({ userId: ownerId, radiusMeters: 10000 }),
+        payload: validMessage({ userId: ownerId, radiusMeters: 5000 }),
       });
       const messageId = messageResponse.json().id;
 

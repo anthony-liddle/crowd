@@ -103,10 +103,10 @@ describe('PostMessageSchema', () => {
     expect(PostMessageSchema.safeParse({ ...validPayload, longitude: 180 }).success).toBe(true);
   });
 
-  it('should reject radiusMeters over 100000', () => {
+  it('should reject radiusMeters over 5000', () => {
     const result = PostMessageSchema.safeParse({
       ...validPayload,
-      radiusMeters: 100001,
+      radiusMeters: 5001,
     });
     expect(result.success).toBe(false);
   });
@@ -124,18 +124,18 @@ describe('PostMessageSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('should reject activeMinutes over 10080 (7 days)', () => {
+  it('should reject activeMinutes over 720 (12 hours)', () => {
     const result = PostMessageSchema.safeParse({
       ...validPayload,
-      activeMinutes: 10081,
+      activeMinutes: 721,
     });
     expect(result.success).toBe(false);
   });
 
-  it('should accept activeMinutes at exactly 10080', () => {
+  it('should accept activeMinutes at exactly 720', () => {
     const result = PostMessageSchema.safeParse({
       ...validPayload,
-      activeMinutes: 10080,
+      activeMinutes: 720,
     });
     expect(result.success).toBe(true);
   });
