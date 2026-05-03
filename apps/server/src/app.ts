@@ -25,8 +25,17 @@ export function buildApp(): FastifyInstance {
     origin: corsOrigin,
   });
 
-  server.get('/health', async () => {
-    return { status: 'ok' };
+  server.get('/health', async (_request, reply) => {
+    try {
+      await db.execute(sql`SELECT 1`);
+      return { status: 'ok' };
+    } catch (error) {
+      reply.code(503);
+      return {
+        status: 'unhealthy',
+        error: error instanceof Error ? error.message : 'database unreachable',
+      };
+    }
   });
 
   // ==================== CROWDS API ====================
@@ -402,13 +411,14 @@ export function buildApp(): FastifyInstance {
         .from(messages)
         .where(whereClause);
 
-      let nearbyMessages;
-      if (parsed.sortBy === 'soonest') {
-        nearbyMessages = await baseQuery.orderBy(asc(messages.expiresAt));
-      } else {
-        // defaults to nearest
-        nearbyMessages = await baseQuery.orderBy(asc(effectiveDistance));
-      }
+      const orderedQuery =
+        parsed.sortBy === 'soonest'
+          ? baseQuery.orderBy(asc(messages.expiresAt))
+          : baseQuery.orderBy(asc(effectiveDistance));
+
+      const nearbyMessages = await orderedQuery
+        .limit(parsed.limit)
+        .offset(parsed.offset);
 
       // Map to DTO
       return nearbyMessages.map(msg => ({

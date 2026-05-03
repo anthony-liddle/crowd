@@ -39,6 +39,11 @@ export const messages = pgTable('messages', {
   ownerIdIdx: index('messages_owner_id_idx').on(t.ownerId),
   expiresAtIdx: index('messages_expires_at_idx').on(t.expiresAt),
   crowdIdIdx: index('messages_crowd_id_idx').on(t.crowdId),
+  // Covering index for the feed query: filters out expired rows via the
+  // expires_at prefix, then supplies latitude/longitude inline so Haversine
+  // can run on index-resident values without heap fetches. Not a true
+  // geospatial index — adopting PostGIS or H3 is a separate, larger change.
+  activeGeoIdx: index('idx_messages_active_geo').on(t.expiresAt, t.latitude, t.longitude),
 }));
 
 export const messageBoosts = pgTable('message_boosts', {

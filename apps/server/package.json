@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
@@ -14,10 +15,7 @@
     "test:watch": "vitest",
     "test:coverage": "bash scripts/test-wrapper.sh --coverage",
     "test:ui": "vitest --ui",
-    "test:unit": "vitest run tests/unit",
-    "test:integration": "vitest run tests/db tests/api",
-    "test:api": "vitest run tests/api",
-    "test:db": "vitest run tests/db"
+    "test:integration": "vitest run __tests__/integration"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
@@ -25,7 +23,7 @@
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",
     "pg": "^8.20.0",
-    "zod": "^3.23.8"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^11.14.0",
