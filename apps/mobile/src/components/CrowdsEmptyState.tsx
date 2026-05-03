@@ -1,42 +1,38 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { Text, View } from 'react-native';
+import { Concentric } from './Concentric';
+import { PrimaryButton, QuietButton } from './Buttons';
 
 interface CrowdsEmptyStateProps {
   onCreatePress: () => void;
   onJoinPress: () => void;
 }
 
-/**
- * CrowdsEmptyState Component
- * Empty state UI for when the user has no crowds
- */
 export const CrowdsEmptyState: React.FC<CrowdsEmptyStateProps> = ({
   onCreatePress,
-  onJoinPress
-}) => {
-  return (
-    <View className="flex-1 items-center justify-center px-8">
-      <Text className="text-6xl mb-4">👥</Text>
-      <Text className="text-xl font-bold text-gray-800 mb-2 text-center">
-        No Crowds Yet
-      </Text>
-      <Text className="text-gray-500 text-center mb-6">
-        Create a crowd to start sharing messages with a group, or join an existing one!
-      </Text>
-      <View className="w-full gap-3">
-        <TouchableOpacity
-          onPress={onCreatePress}
-          className="bg-blue-600 rounded-lg p-4 items-center"
-        >
-          <Text className="text-white font-semibold text-base">Create a Crowd</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={onJoinPress}
-          className="bg-white border border-blue-600 rounded-lg p-4 items-center"
-        >
-          <Text className="text-blue-600 font-semibold text-base">Join a Crowd</Text>
-        </TouchableOpacity>
-      </View>
+  onJoinPress,
+}) => (
+  <View
+    className="flex-1 items-center justify-center px-screen-x"
+    style={{ paddingVertical: 48 }}
+  >
+    <Concentric size={130} centerLit showOuterDots />
+    <Text
+      className="font-serif text-title text-ink dark:text-ink-d"
+      style={{ marginTop: 24, textAlign: 'center' }}
+    >
+      No crowds yet
+    </Text>
+    <Text
+      className="font-sans text-body text-dust dark:text-dust-d"
+      style={{ marginTop: 8, textAlign: 'center', maxWidth: 280 }}
+    >
+      A crowd is a small trusted group. Open crowds join by code; private
+      crowds need physical proximity.
+    </Text>
+    <View style={{ marginTop: 24, width: '100%', maxWidth: 280, gap: 10 }}>
+      <PrimaryButton label="Start a crowd" onPress={onCreatePress} />
+      <QuietButton label="Join with a code" onPress={onJoinPress} />
     </View>
-  );
-};
+  </View>
+);

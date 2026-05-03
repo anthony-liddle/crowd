@@ -4,10 +4,11 @@ module.exports = function (api) {
   const isTest = process.env.NODE_ENV === 'test';
 
   return {
-    presets: ['babel-preset-expo'],
-    plugins: [
-      // Skip nativewind/babel during tests as it requires react-native runtime
+    presets: [
+      ['babel-preset-expo', { jsxImportSource: 'nativewind' }],
       ...(isTest ? [] : ['nativewind/babel']),
+    ],
+    plugins: [
       [
         'module-resolver',
         {
@@ -21,4 +22,3 @@ module.exports = function (api) {
     ],
   };
 };
-

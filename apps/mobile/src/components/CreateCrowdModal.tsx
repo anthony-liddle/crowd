@@ -1,7 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, Modal, TextInput, Switch, TouchableOpacity } from 'react-native';
+import {
+  Modal,
+  Pressable,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useColorScheme } from 'nativewind';
 import { createCrowd } from '@/services/api';
 import Toast from 'react-native-toast-message';
+import { PrimaryButton, QuietButton } from './Buttons';
 
 interface CreateCrowdModalProps {
   visible: boolean;
@@ -9,15 +18,20 @@ interface CreateCrowdModalProps {
   onCreated: () => void;
 }
 
-/**
- * CreateCrowdModal Component
- * Modal for creating a new crowd
- */
+const COLORS = {
+  light: { rule: '#E0DAC9', ember: '#B85A2C', paper2: '#EFE9DA', dust2: '#A09B91' },
+  dark: { rule: '#2A2724', ember: '#D08454', paper2: '#1B1A15', dust2: '#5A554B' },
+};
+
 export const CreateCrowdModal: React.FC<CreateCrowdModalProps> = ({
   visible,
   onClose,
-  onCreated
+  onCreated,
 }) => {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const c = isDark ? COLORS.dark : COLORS.light;
+
   const [name, setName] = useState('');
   const [isOpen, setIsOpen] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -37,8 +51,8 @@ export const CreateCrowdModal: React.FC<CreateCrowdModalProps> = ({
       await createCrowd({ name: name.trim(), isOpen });
       Toast.show({
         type: 'success',
-        text1: 'Crowd Created!',
-        text2: 'Your crowd is now active for 24 hours',
+        text1: 'Crowd created',
+        text2: 'Your crowd is active for 24 hours.',
       });
       setName('');
       setIsOpen(true);
@@ -56,60 +70,84 @@ export const CreateCrowdModal: React.FC<CreateCrowdModalProps> = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
-      <View className="flex-1 justify-end bg-black/50">
-        <View className="bg-white rounded-t-3xl p-6">
-          <Text className="text-xl font-bold text-gray-800 mb-4">Create a Crowd</Text>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable
+        className="flex-1 justify-end"
+        style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+        onPress={onClose}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          className="bg-paper dark:bg-paper-d rounded-t-[20px] px-screen-x pt-5 pb-7"
+        >
+          <View className="self-center w-9 h-1 bg-rule dark:bg-rule-d rounded-full mb-4" />
+          <Text
+            className="font-serif text-ink dark:text-ink-d mb-3"
+            style={{ fontSize: 18 }}
+          >
+            Start a crowd
+          </Text>
 
-          <Text className="text-sm font-semibold text-gray-700 mb-2">Crowd Name</Text>
+          <Text className="font-sans text-meta text-dust dark:text-dust-d mb-2">
+            Crowd name
+          </Text>
           <TextInput
-            className="bg-gray-100 border border-gray-300 rounded-lg p-4 text-base text-gray-900 mb-4"
-            placeholder="Enter crowd name"
-            placeholderTextColor="#9CA3AF"
+            className="bg-paper-2 dark:bg-paper-2-d border border-rule dark:border-rule-d rounded-md font-sans text-ink dark:text-ink-d"
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              marginBottom: 16,
+              fontSize: 15,
+            }}
+            placeholder="Name your crowd"
+            placeholderTextColor={c.dust2}
+            selectionColor={c.ember}
             value={name}
             onChangeText={setName}
             maxLength={50}
           />
 
-          <View className="flex-row justify-between items-center mb-6">
-            <View>
-              <Text className="text-sm font-semibold text-gray-700">Open Crowd</Text>
-              <Text className="text-xs text-gray-500">
-                {isOpen ? 'Anyone with the link can join' : 'Only you can add members'}
+          <View
+            className="flex-row items-center justify-between"
+            style={{ marginBottom: 24 }}
+          >
+            <View className="flex-1 pr-4">
+              <Text
+                className="font-sans-medium text-ink dark:text-ink-d"
+                style={{ fontSize: 13 }}
+              >
+                Open crowd
+              </Text>
+              <Text
+                className="font-sans text-dust dark:text-dust-d"
+                style={{ fontSize: 12, marginTop: 2 }}
+              >
+                {isOpen ? 'Anyone with the code can join' : 'Only you can add members'}
               </Text>
             </View>
             <Switch
               value={isOpen}
               onValueChange={setIsOpen}
-              trackColor={{ false: '#E5E7EB', true: '#93C5FD' }}
-              thumbColor={isOpen ? '#3B82F6' : '#9CA3AF'}
+              trackColor={{ false: c.rule, true: c.ember }}
+              thumbColor={c.paper2}
+              ios_backgroundColor={c.rule}
             />
           </View>
 
-          <View className="flex-row gap-3">
-            <TouchableOpacity
-              onPress={onClose}
-              className="flex-1 bg-gray-200 rounded-lg py-4 items-center"
-            >
-              <Text className="text-gray-700 font-semibold">Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleCreate}
-              disabled={creating}
-              className={`flex-1 bg-blue-600 rounded-lg py-4 items-center ${creating ? 'opacity-50' : ''}`}
-            >
-              <Text className="text-white font-semibold">
-                {creating ? 'Creating...' : 'Create'}
-              </Text>
-            </TouchableOpacity>
+          <View className="flex-row" style={{ gap: 10 }}>
+            <View className="flex-1">
+              <QuietButton label="Cancel" onPress={onClose} />
+            </View>
+            <View className="flex-1" style={{ opacity: creating ? 0.5 : 1 }}>
+              <PrimaryButton
+                label={creating ? 'Creating…' : 'Create'}
+                onPress={handleCreate}
+                disabled={creating}
+              />
+            </View>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 };

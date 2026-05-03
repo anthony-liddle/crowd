@@ -50,18 +50,8 @@ export const addMyMessage = async (id: string, activeMinutes: number) => {
  */
 export const addBoostedMessage = async (id: string, expiresAt: string) => {
   const records = await getRecords(BOOSTED_MESSAGES_KEY);
-  // Expiry for boost record isn't strictly needed for validity as server checks, 
-  // but good for cleanup. We assume a default max or just keep it for a while.
-  // Actually, we should try to store the message's expiry if we knew it, 
-  // but for now let's just store it and rely on cleanup logic that keeps it for say 24h or until we check?
-  // The user prompt said: "Local storage data should be purged occasionally for posted messages that have expired."
-  // For boosted messages, we might want to purge them too. 
-  // Let's set a default long expiry for local record if unknown, or better, we pass it in.
-  // I will update the signature to accept activeMinutes or expiresAt if possible.
-  // But boost endpoint doesn't return expiry. Server checks it.
-  // I'll set it to 24 hours for local cleanup purposes as a safe upper bound for most temporary messages 
-  // (though schema allows any activeMinutes). 
-  // Actually, I can pass the message's `timeLeft` or `expiresAt` from the feed item.
+  // The expiration timestamp drives local cleanup; the server is the source of
+  // truth for whether a boosted message is still active.
   records.push({ id, expiresAt });
   await saveRecords(BOOSTED_MESSAGES_KEY, records);
 };

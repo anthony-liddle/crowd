@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Share } from 'react-native';
+import { Share, Text, View } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Crowd } from '@/types';
 import { formatTimeRemaining } from '@/utils/formatters';
-import Toast from 'react-native-toast-message';
+import { QuietButton } from './Buttons';
 
 interface CrowdCardProps {
   crowd: Crowd;
@@ -10,10 +11,6 @@ interface CrowdCardProps {
   onRefresh: () => void;
 }
 
-/**
- * CrowdCard Component
- * Displays an individual crowd with its status and actions
- */
 export const CrowdCard: React.FC<CrowdCardProps> = ({ crowd, onLeave }) => {
   const handleShareInvite = async () => {
     const inviteLink = `crowd://join/${crowd.id}`;
@@ -31,52 +28,70 @@ export const CrowdCard: React.FC<CrowdCardProps> = ({ crowd, onLeave }) => {
   };
 
   return (
-    <View className="bg-white rounded-lg p-4 mx-2 mb-3 shadow-sm border border-gray-100">
-      <View className="flex-row justify-between items-start mb-2">
-        <View className="flex-1">
-          <View className="flex-row items-center gap-2">
-            <Text className="text-lg font-semibold text-gray-800">{crowd.name}</Text>
-            {crowd.isOwner && (
-              <View className="bg-blue-100 px-2 py-0.5 rounded">
-                <Text className="text-blue-600 text-xs font-medium">Owner</Text>
-              </View>
-            )}
-            <View className={`px-2 py-0.5 rounded ${crowd.isOpen ? 'bg-green-100' : 'bg-orange-100'}`}>
-              <Text className={`text-xs font-medium ${crowd.isOpen ? 'text-green-600' : 'text-orange-600'}`}>
-                {crowd.isOpen ? 'Open' : 'Closed'}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      <View className="flex-row items-center gap-4 mb-3">
-        <View className="flex-row items-center gap-1">
-          <Text className="text-gray-500">👤</Text>
-          <Text className="text-gray-600 text-sm">{crowd.memberCount} members</Text>
-        </View>
-        <View className="flex-row items-center gap-1">
-          <Text className="text-gray-500">⏰</Text>
-          <Text className="text-gray-600 text-sm">{formatTimeRemaining(crowd.expiresAt)}</Text>
-        </View>
-      </View>
-
-      <View className="flex-row gap-2">
-        {crowd.canInvite && (
-          <TouchableOpacity
-            onPress={handleShareInvite}
-            className="flex-1 bg-blue-50 border border-blue-200 rounded-lg py-2 items-center"
-          >
-            <Text className="text-blue-600 font-medium text-sm">Invite</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          onPress={() => onLeave(crowd)}
-          className="flex-1 bg-red-50 border border-red-200 rounded-lg py-2 items-center"
+    <View
+      className="bg-paper-2 dark:bg-paper-2-d border border-rule dark:border-rule-d rounded-md mx-screen-x mb-3"
+      style={{ padding: 14 }}
+    >
+      <View
+        className="flex-row items-center"
+        style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap' }}
+      >
+        <Text
+          className="font-sans-medium text-ink dark:text-ink-d"
+          style={{ fontSize: 16 }}
         >
-          <Text className="text-red-600 font-medium text-sm">Leave</Text>
-        </TouchableOpacity>
+          {crowd.name}
+        </Text>
+        {crowd.isOwner && <Pill label="Owner" tone="ember" />}
+        <Pill label={crowd.isOpen ? 'Open' : 'Closed'} tone={crowd.isOpen ? 'ember' : 'dust'} />
+      </View>
+
+      <View className="flex-row" style={{ gap: 16, marginBottom: 12 }}>
+        <Text className="font-sans text-meta text-dust dark:text-dust-d">
+          {crowd.memberCount} members
+        </Text>
+        <Text className="font-sans text-meta text-dust dark:text-dust-d">
+          {formatTimeRemaining(crowd.expiresAt)}
+        </Text>
+      </View>
+
+      <View className="flex-row" style={{ gap: 8 }}>
+        {crowd.canInvite && (
+          <View className="flex-1">
+            <QuietButton label="Invite" onPress={handleShareInvite} />
+          </View>
+        )}
+        <View className="flex-1">
+          <QuietButton label="Leave" onPress={() => onLeave(crowd)} />
+        </View>
       </View>
     </View>
   );
 };
+
+interface PillProps {
+  label: string;
+  tone: 'ember' | 'dust';
+}
+
+const Pill: React.FC<PillProps> = ({ label, tone }) => (
+  <View
+    className={
+      tone === 'ember'
+        ? 'border border-ember dark:border-ember-d rounded-sm'
+        : 'border border-rule dark:border-rule-d rounded-sm'
+    }
+    style={{ paddingHorizontal: 6, paddingVertical: 1 }}
+  >
+    <Text
+      className={
+        tone === 'ember'
+          ? 'font-sans-medium text-ember dark:text-ember-d'
+          : 'font-sans text-dust dark:text-dust-d'
+      }
+      style={{ fontSize: 10 }}
+    >
+      {label}
+    </Text>
+  </View>
+);

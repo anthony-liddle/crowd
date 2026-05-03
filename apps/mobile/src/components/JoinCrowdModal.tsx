@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, Modal, TextInput, TouchableOpacity } from 'react-native';
-import { joinCrowd } from '@/services/api';
+import { Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { useColorScheme } from 'nativewind';
 import Toast from 'react-native-toast-message';
+import { joinCrowd } from '@/services/api';
+import { PrimaryButton, QuietButton } from './Buttons';
 
 interface JoinCrowdModalProps {
   visible: boolean;
@@ -9,15 +11,20 @@ interface JoinCrowdModalProps {
   onJoined: () => void;
 }
 
-/**
- * JoinCrowdModal Component
- * Modal for joining a crowd via invite code
- */
+const COLORS = {
+  light: { ember: '#B85A2C', dust2: '#A09B91' },
+  dark: { ember: '#D08454', dust2: '#5A554B' },
+};
+
 export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
   visible,
   onClose,
-  onJoined
+  onJoined,
 }) => {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const c = isDark ? COLORS.dark : COLORS.light;
+
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
 
@@ -31,7 +38,6 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
       return;
     }
 
-    // Extract crowd ID from invite code (format: crowd://join/{crowdId} or just {crowdId})
     let crowdId = joinCode.trim();
     if (crowdId.includes('crowd://join/')) {
       crowdId = crowdId.replace('crowd://join/', '');
@@ -42,8 +48,8 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
       await joinCrowd(crowdId);
       Toast.show({
         type: 'success',
-        text1: 'Joined!',
-        text2: 'You have joined the crowd',
+        text1: 'Joined',
+        text2: 'You have joined the crowd.',
       });
       setJoinCode('');
       onJoined();
@@ -65,65 +71,92 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
-      <View className="flex-1 justify-end bg-black/50">
-        <View className="bg-white rounded-t-3xl p-6">
-          <Text className="text-xl font-bold text-gray-800 mb-4">Join a Crowd</Text>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable
+        className="flex-1 justify-end"
+        style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+        onPress={onClose}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          className="bg-paper dark:bg-paper-d rounded-t-[20px] px-screen-x pt-5 pb-7"
+        >
+          <View className="self-center w-9 h-1 bg-rule dark:bg-rule-d rounded-full mb-4" />
+          <Text
+            className="font-serif text-ink dark:text-ink-d mb-3"
+            style={{ fontSize: 18 }}
+          >
+            Join a crowd
+          </Text>
 
-          <Text className="text-sm font-semibold text-gray-700 mb-2">Invite Code</Text>
+          <Text className="font-sans text-meta text-dust dark:text-dust-d mb-2">
+            Invite code
+          </Text>
           <TextInput
-            className="bg-gray-100 border border-gray-300 rounded-lg p-4 text-base text-gray-900 mb-4"
+            className="bg-paper-2 dark:bg-paper-2-d border border-rule dark:border-rule-d rounded-md font-sans text-ink dark:text-ink-d"
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              marginBottom: 12,
+              fontSize: 15,
+            }}
             placeholder="Paste invite code or link"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={c.dust2}
+            selectionColor={c.ember}
             value={joinCode}
             onChangeText={setJoinCode}
             autoCapitalize="none"
             autoCorrect={false}
           />
 
-          <Text className="text-xs text-gray-500 text-center mb-4">
-            Or use QR code / NFC to join instantly
+          <Text
+            className="font-sans text-meta text-dust dark:text-dust-d"
+            style={{ marginBottom: 12, textAlign: 'center' }}
+          >
+            Or use a QR code or NFC tap to join instantly.
           </Text>
 
-          <View className="flex-row gap-3 mb-4">
-            <TouchableOpacity
-              className="flex-1 bg-gray-100 border border-gray-300 rounded-lg py-3 items-center"
-              onPress={() => Toast.show({ type: 'info', text1: 'Coming Soon', text2: 'QR Scanner will be available soon' })}
-            >
-              <Text className="text-gray-700">📷 Scan QR</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-1 bg-gray-100 border border-gray-300 rounded-lg py-3 items-center"
-              onPress={() => Toast.show({ type: 'info', text1: 'Coming Soon', text2: 'NFC tap will be available soon' })}
-            >
-              <Text className="text-gray-700">📱 Tap NFC</Text>
-            </TouchableOpacity>
+          <View className="flex-row" style={{ gap: 10, marginBottom: 16 }}>
+            <View className="flex-1">
+              <QuietButton
+                label="Scan QR"
+                onPress={() =>
+                  Toast.show({
+                    type: 'info',
+                    text1: 'Coming soon',
+                    text2: 'QR scanning is on the roadmap.',
+                  })
+                }
+              />
+            </View>
+            <View className="flex-1">
+              <QuietButton
+                label="Tap NFC"
+                onPress={() =>
+                  Toast.show({
+                    type: 'info',
+                    text1: 'Coming soon',
+                    text2: 'NFC join is on the roadmap.',
+                  })
+                }
+              />
+            </View>
           </View>
 
-          <View className="flex-row gap-3">
-            <TouchableOpacity
-              onPress={onClose}
-              className="flex-1 bg-gray-200 rounded-lg py-4 items-center"
-            >
-              <Text className="text-gray-700 font-semibold">Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleJoin}
-              disabled={joining}
-              className={`flex-1 bg-blue-600 rounded-lg py-4 items-center ${joining ? 'opacity-50' : ''}`}
-            >
-              <Text className="text-white font-semibold">
-                {joining ? 'Joining...' : 'Join'}
-              </Text>
-            </TouchableOpacity>
+          <View className="flex-row" style={{ gap: 10 }}>
+            <View className="flex-1">
+              <QuietButton label="Cancel" onPress={onClose} />
+            </View>
+            <View className="flex-1" style={{ opacity: joining ? 0.5 : 1 }}>
+              <PrimaryButton
+                label={joining ? 'Joining…' : 'Join'}
+                onPress={handleJoin}
+                disabled={joining}
+              />
+            </View>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 };

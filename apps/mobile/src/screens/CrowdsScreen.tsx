@@ -1,38 +1,27 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  RefreshControl,
-  Alert,
-} from 'react-native';
+import { View, FlatList, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
 import { Crowd } from '@/types';
 import { getMyCrowds, leaveCrowd } from '@/services/api';
-import { PageHeader } from '@/components/PageHeader';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { CrowdCard } from '@/components/CrowdCard';
 import { CreateCrowdModal } from '@/components/CreateCrowdModal';
 import { JoinCrowdModal } from '@/components/JoinCrowdModal';
 import { CrowdsEmptyState } from '@/components/CrowdsEmptyState';
-import Toast from 'react-native-toast-message';
+import { PrimaryButton, QuietButton } from '@/components/Buttons';
+import { useThemedRefreshTint } from '@/hooks/useThemedRefreshTint';
 
-/**
- * CrowdsScreen Component
- * Displays user's crowds with options to create, join, and leave crowds
- */
 export const CrowdsScreen: React.FC = () => {
+  const refreshTint = useThemedRefreshTint();
+
   const [crowds, setCrowds] = useState<Crowd[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Modal states
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [joinModalVisible, setJoinModalVisible] = useState(false);
 
-  /**
-   * Load crowds from API
-   */
   const loadCrowds = useCallback(async () => {
     try {
       if (!refreshing) setLoading(true);
@@ -66,9 +55,6 @@ export const CrowdsScreen: React.FC = () => {
     loadCrowds();
   }, [loadCrowds]);
 
-  /**
-   * Handle leaving a crowd
-   */
   const handleLeave = async (crowd: Crowd) => {
     Alert.alert(
       'Leave Crowd',
@@ -83,7 +69,7 @@ export const CrowdsScreen: React.FC = () => {
               await leaveCrowd(crowd.id);
               Toast.show({
                 type: 'success',
-                text1: 'Left Crowd',
+                text1: 'Left crowd',
                 text2: `You have left "${crowd.name}"`,
               });
               loadCrowds();
@@ -101,24 +87,26 @@ export const CrowdsScreen: React.FC = () => {
   };
 
   return (
-    <View className="flex-1 bg-gray-50">
-      <PageHeader title="Crowds" />
+    <View className="flex-1 bg-paper dark:bg-paper-d">
+      <ScreenHeader title="Crowds" />
 
-      {/* Header action buttons */}
       {crowds.length > 0 && (
-        <View className="flex-row px-4 py-3 gap-3">
-          <TouchableOpacity
-            onPress={() => setCreateModalVisible(true)}
-            className="flex-1 bg-blue-600 rounded-lg py-3 items-center"
-          >
-            <Text className="text-white font-semibold">Create</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setJoinModalVisible(true)}
-            className="flex-1 bg-white border border-blue-600 rounded-lg py-3 items-center"
-          >
-            <Text className="text-blue-600 font-semibold">Join</Text>
-          </TouchableOpacity>
+        <View
+          className="flex-row px-screen-x"
+          style={{ gap: 10, marginBottom: 12 }}
+        >
+          <View className="flex-1">
+            <PrimaryButton
+              label="Start a crowd"
+              onPress={() => setCreateModalVisible(true)}
+            />
+          </View>
+          <View className="flex-1">
+            <QuietButton
+              label="Join with a code"
+              onPress={() => setJoinModalVisible(true)}
+            />
+          </View>
         </View>
       )}
 
@@ -133,13 +121,13 @@ export const CrowdsScreen: React.FC = () => {
           />
         )}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
+        contentContainerStyle={{ paddingBottom: 24, flexGrow: 1 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#3B82F6"
-            colors={['#3B82F6']}
+            tintColor={refreshTint}
+            colors={[refreshTint]}
           />
         }
         ListEmptyComponent={
@@ -157,7 +145,6 @@ export const CrowdsScreen: React.FC = () => {
         onClose={() => setCreateModalVisible(false)}
         onCreated={loadCrowds}
       />
-
       <JoinCrowdModal
         visible={joinModalVisible}
         onClose={() => setJoinModalVisible(false)}
