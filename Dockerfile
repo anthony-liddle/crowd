@@ -1,39 +1,57 @@
-FROM node:22-slim AS base
+# syntax=docker/dockerfile:1.7
 
-# Enable corepack and use pnpm
+# ---------- deps: install workspace deps once, share across targets ----------
+FROM node:22-slim AS deps
+
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 
 WORKDIR /app
 
-# Copy the whole repo for context
+# Copy the whole repo for context (pnpm needs the workspace layout to resolve
+# workspace:* deps). The .dockerignore strips node_modules and the mobile app.
 COPY . .
 
-# Install dependencies using pnpm workspaces
+# Install at image-build time so the named node_modules volume in compose can
+# persist this layer across dev:up / dev:down cycles.
 RUN pnpm install --frozen-lockfile
 
-# Build everything (specifically we need shared and server)
+# ---------- dev: hot-reload target used by docker-compose ----------
+FROM deps AS dev
+
+# The server imports @repo/shared via its built dist/index.js, so shared must
+# be compiled before tsx watch can resolve it.
+RUN pnpm --filter @repo/shared build
+
+EXPOSE 8080
+
+WORKDIR /app/apps/server
+
+# Apply migrations on container start, then hand off to tsx watch. Migrations
+# stay in-process here; in Phase C they move to Fly's release_command.
+CMD ["sh", "-c", "pnpm migrate && pnpm dev"]
+
+# ---------- build: compile server + shared for production ----------
+FROM deps AS build
+
 RUN pnpm build
 
-# Final stage
-FROM node:22-slim
+# ---------- prod: lean runtime image (Phase C target) ----------
+FROM node:22-slim AS prod
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 
 WORKDIR /app
 
-# Enable pnpm in final stage too
-RUN corepack enable
+COPY --from=build /app /app
 
-# Copy built files and node_modules from base
-COPY --from=base /app /app
-
-# Expose port
 EXPOSE 8080
 
-# Start the server
 WORKDIR /app/apps/server
 
-# Create a startup script that runs migrations then starts the server.
 # A failed migration must abort startup (set -e + no `||` swallow). In Phase C
 # this will be split: migrations move to Fly.io's release_command and the start
 # command will run the server only.

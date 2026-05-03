@@ -7,9 +7,58 @@ Thank you for your interest in contributing to Crowd! This document provides gui
 1. Fork the repository
 2. Clone your fork: `git clone https://github.com/yourusername/crowd.git`
 3. Install dependencies: `pnpm install`
-4. Set up the database: `docker-compose up -d`
-5. Run migrations: `pnpm --filter @app/server migrate`
-6. Start development: `pnpm dev`
+4. Start the local stack (Postgres + server in containers): `pnpm dev:up`
+5. Seed dev data: `pnpm dev:seed`
+6. Start the mobile app: `pnpm --filter @app/mobile start`
+
+For more detail — including the per-workspace env files, devtools, and host-only workflow — see [Local Development](#local-development).
+
+## Local Development
+
+The local stack lives in `docker-compose.yml` and runs Postgres plus the Fastify server. The mobile app and devtools run on the host and talk to the containerized server over `localhost:8080`.
+
+### One-time setup
+
+`.env.example` files live next to each app (`apps/server/.env.example`, `apps/mobile/.env.example`, `apps/devtools/.env.example`). The defaults in those files line up with the docker-compose stack, so you only need to copy them to `.env` if you're going to deviate from the defaults — most contributors won't need to.
+
+### Daily commands (root scripts)
+
+| Command           | What it does                                                                |
+| ----------------- | --------------------------------------------------------------------------- |
+| `pnpm dev:up`     | Start Postgres + server in containers (server runs `tsx watch` for hot reload, applies migrations on startup) |
+| `pnpm dev:down`   | Stop the stack but keep volumes (`node_modules` cache + Postgres data persist) |
+| `pnpm dev:logs`   | Tail the server container logs                                              |
+| `pnpm dev:reset`  | Stop the stack and **drop volumes** — full clean slate                      |
+| `pnpm dev:seed`   | Seed dev data (4 crowds, 12 messages, 7 boosts, centered on Aloha, OR — matches the mobile app's `DEFAULT_LOCATION`). **Destructive**: truncates and re-inserts every run. |
+
+### Typical flow
+
+```bash
+pnpm dev:up                          # bring stack up; first run pulls images and builds the server image
+pnpm dev:seed                        # populate with dev data
+pnpm --filter @app/mobile start      # Expo: simulator and physical-device-on-LAN both work
+pnpm --filter @app/devtools dev      # optional: web devtools at http://localhost:5173
+```
+
+The mobile app auto-detects the server URL via `Constants.expoConfig?.hostUri` and falls back to `http://localhost:8080`. Override with `EXPO_PUBLIC_API_URL` only if you need to point at a deployed server.
+
+> **iOS Simulator location.** Set the simulator location to match the seed center: **Simulator → Features → Location → Custom Location**, enter `45.46948, -122.863`. Otherwise the simulator may report a different location (Apple's Cupertino default, or whatever was last set) and the seeded feed will appear empty.
+
+### Host-only server option
+
+If you'd rather run the server directly on your host (faster iteration, attach a debugger, etc.), keep Postgres in Docker but skip the server container:
+
+```bash
+docker compose up -d db              # just the db
+pnpm --filter @app/server migrate    # apply migrations
+pnpm --filter @app/server dev        # tsx watch on host
+pnpm dev:seed                        # still works — same DATABASE_URL
+```
+
+### When to `dev:reset` vs `dev:down`
+
+- `dev:down` is the default. Volumes persist, so the next `dev:up` is fast and your seed data is still there.
+- `dev:reset` when: you change `pnpm-lock.yaml` (the named `node_modules` volume is stale), Postgres data looks wrong, or you want to verify a true cold-start.
 
 ## Development Workflow
 

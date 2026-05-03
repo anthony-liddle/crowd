@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   db:
-    image: postgis/postgis:15-3.4
+    image: postgres:15-alpine
     ports:
       - '5432:5432'
     environment:
@@ -11,6 +9,52 @@ services:
       POSTGRES_DB: monorepo_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '8080:8080'
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/monorepo_db
+      PORT: '8080'
+      HOST: 0.0.0.0
+      CORS_ORIGIN: '*'
+    volumes:
+      # Source mounts for hot reload via tsx watch. Only the directories the
+      # server cares about are mounted; the rest of the image (node_modules,
+      # built @repo/shared, drizzle.config.ts) stays from the image layer.
+      - ./apps/server/src:/app/apps/server/src
+      - ./apps/server/drizzle:/app/apps/server/drizzle
+      # Named volume preserves the .pnpm store + root node_modules across
+      # dev:up/dev:down cycles. Drop with `pnpm dev:reset` (docker compose
+      # down -v) when deps change.
+      - server_node_modules:/app/node_modules
+    healthcheck:
+      # Node 22 ships a global fetch; avoids depending on wget/curl in the
+      # slim base image.
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 volumes:
   postgres_data:
+  server_node_modules:
