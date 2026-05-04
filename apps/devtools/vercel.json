@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @repo/shared build && pnpm --filter @repo/api build && pnpm --filter @app/devtools build",
+  "outputDirectory": "dist",
+  "installCommand": "echo 'install handled in buildCommand'",
+  "framework": "vite"
+}
