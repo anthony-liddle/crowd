@@ -1,7 +1,8 @@
 {
   "build": {
     "dev-deployed": {
-      "distribution": "internal",
+      "distribution": "store",
+      "autoIncrement": true,
       "ios": {
         "simulator": false
       },
