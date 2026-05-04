@@ -18,7 +18,10 @@
     ],
     "ios": {
       "bundleIdentifier": "dev.anthonyliddle.crowd",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,6 +35,11 @@
     "plugins": [
       "expo-secure-store",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7f7700b7-f926-4cae-aafc-1f7c0192446e"
+      }
+    }
   }
 }

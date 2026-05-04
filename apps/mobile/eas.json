@@ -10,5 +10,8 @@
         "EXPO_PUBLIC_API_URL": "https://crowd-dev.fly.dev"
       }
     }
+  },
+  "cli": {
+    "appVersionSource": "remote"
   }
 }
