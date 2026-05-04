@@ -14,6 +14,13 @@
 # `vercel deploy --prebuilt --prod`. The `--prebuilt` flag means Vercel
 # doesn't rebuild server-side — it just publishes the .vercel/output
 # directory we just produced.
+#
+# CWD: all Vercel CLI commands run from the repo root. Vercel's CLI
+# resolves the project root as <cwd>/<rootDirectory>, where rootDirectory
+# comes from the project's "Root Directory" setting (apps/devtools).
+# Running from repo root means the resolved path is <repo>/apps/devtools.
+# Running from apps/devtools would double-append and resolve to
+# <repo>/apps/devtools/apps/devtools — which doesn't exist.
 
 name: Deploy Devtools
 
@@ -31,6 +38,9 @@ jobs:
     name: Deploy to Vercel
     runs-on: ubuntu-latest
     concurrency: deploy-devtools
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -44,13 +54,7 @@ jobs:
         run: npm install --global vercel@latest
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/devtools
       - name: Build
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/devtools
       - name: Deploy
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/devtools
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
