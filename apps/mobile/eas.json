@@ -14,7 +14,7 @@
   "submit": {
     "dev-deployed": {
       "ios": {
-        "appleTeamId": "$APPLE_TEAM_ID",
+        "appleTeamId": "9ML46U556H",
         "ascAppId": "6766116979",
         "ascApiKeyPath": "./api-key.p8",
         "ascApiKeyId": "$ASC_API_KEY_ID",

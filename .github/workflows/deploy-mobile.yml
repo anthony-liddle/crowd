@@ -64,7 +64,10 @@ jobs:
       - name: Build and auto-submit
         working-directory: apps/mobile
         env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # APPLE_TEAM_ID intentionally not set here — eas.json hardcodes
+          # the Team ID directly. Apple Team IDs are public (visible in
+          # every signed binary's metadata), so the env-var indirection
+          # added complexity without security benefit.
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
         run: eas build --profile dev-deployed --platform ios --non-interactive --auto-submit --no-wait

@@ -99,8 +99,9 @@ Vercel's GitHub integration still produces a preview deploy for every PR branch 
 | ------ | --------- | ------- |
 | `FLY_API_TOKEN` | GitHub Actions secrets | `deploy-server.yml` |
 | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | GitHub Actions secrets | `deploy-devtools.yml` |
-| `EXPO_TOKEN`, `APPLE_ID`, `APPLE_TEAM_ID` | GitHub Actions secrets | `deploy-mobile.yml` |
+| `EXPO_TOKEN` | GitHub Actions secrets | `deploy-mobile.yml` (EAS CLI auth) |
 | `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, `ASC_API_KEY_P8` | GitHub Actions secrets | `deploy-mobile.yml` (App Store Connect API key for non-interactive submit) |
+| `APPLE_ID`, `APPLE_TEAM_ID` | GitHub Actions secrets | currently unused — kept for future flows that might need them. The Apple Team ID is hardcoded in `apps/mobile/eas.json` (it's public — visible in every signed binary). |
 | `DATABASE_URL`, `CORS_ORIGIN` | Fly.io secrets store | server runtime |
 | `VITE_API_BASE_URL` | Vercel project env vars | devtools build |
 | Apple Distribution Certificate, iOS Provisioning Profile | EAS credential vault | EAS Build's iOS signing |
