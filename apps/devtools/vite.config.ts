@@ -18,7 +18,14 @@ export default defineConfig({
   },
   build: {
     commonjsOptions: {
-      include: [/@repo\/shared/, /@repo\/api/, /node_modules/],
+      // commonjsOptions.include matches the *resolved file path*, not the
+      // import specifier. With pnpm's symlinked workspace packages, imports
+      // like `@repo/api` resolve to `packages/api/dist/...` — no `@repo` in
+      // the path — so an `/@repo\/api/` regex never matches and the plugin
+      // skips converting CJS requires, which then leak into the browser
+      // bundle as `require is not defined` at runtime. Match the actual
+      // resolved paths.
+      include: [/packages\/shared/, /packages\/api/, /node_modules/],
     },
   },
 })
