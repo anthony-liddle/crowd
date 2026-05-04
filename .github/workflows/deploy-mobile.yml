@@ -1,0 +1,70 @@
+# Builds apps/mobile on EAS Build and auto-submits to TestFlight on merge
+# to main.
+#
+# Path filter: only fires when something in the mobile binary's dependency
+# graph changes (mobile source/config, shared workspace deps, or this
+# workflow itself). Server-only or devtools-only changes don't trigger.
+#
+# Concurrency: at most one mobile build runs at a time; a second push
+# queues until the first finishes.
+#
+# Auth strategy: pure App Store Connect API key (not Apple ID + password).
+# The .p8 contents live in GitHub secrets; the workflow writes them to a
+# file at apps/mobile/api-key.p8 (gitignored via root *.p8) and references
+# that file from eas.json's submit profile. Key/Issuer IDs come through
+# env-var substitution into eas.json.
+#
+# What runs where:
+#   - The Docker build runs on EAS Build's cloud, not on this runner.
+#   - eas submit runs on EAS's infrastructure too (triggered by --auto-submit).
+#   - This runner just orchestrates: install pnpm, install EAS CLI, write
+#     the .p8 file, invoke `eas build`. Wall-clock here is short (~5 min);
+#     wall-clock on EAS Build is the long part (~15-30 min).
+
+name: Deploy Mobile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/shared/**'
+      - 'packages/api/**'
+      - '.github/workflows/deploy-mobile.yml'
+
+jobs:
+  build:
+    name: Build and submit to TestFlight
+    runs-on: ubuntu-latest
+    concurrency: deploy-mobile
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Write App Store Connect API key file
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        working-directory: apps/mobile
+        run: |
+          printf '%s' "$ASC_API_KEY_P8" > api-key.p8
+          # Sanity check: file is non-empty and PEM-shaped. Catches a
+          # malformed/empty secret early instead of letting eas submit
+          # fail with a less-clear "invalid private key" 5 minutes later.
+          test -s api-key.p8 || { echo "api-key.p8 is empty"; exit 1; }
+          head -1 api-key.p8 | grep -q "BEGIN PRIVATE KEY" || { echo "api-key.p8 doesn't look like a PEM private key"; exit 1; }
+      - name: Build and auto-submit
+        working-directory: apps/mobile
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: eas build --profile dev-deployed --platform ios --non-interactive --auto-submit --no-wait
