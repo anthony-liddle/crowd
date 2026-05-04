@@ -1,4 +1,10 @@
-import { api } from '@repo/api';
+// Namespace-import workaround: Rollup's static CJS named-export tracing
+// (Vite 7 / Rollup 4) doesn't reliably resolve `import { api } from '@repo/api'`
+// through TypeScript's CJS re-export emit. A namespace import then destructure
+// bypasses that path. Consumer-side workaround chosen over publishing-side
+// changes to keep @repo/api self-consistent and avoid wider refactors.
+import * as ApiPkg from '@repo/api';
+const { api } = ApiPkg;
 import { 
   getOrGenerateUserId, 
   getOrGenerateCrowdUserId, 

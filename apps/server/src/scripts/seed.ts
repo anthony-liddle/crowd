@@ -47,7 +47,32 @@ const USERS = {
   eve:   '55555555-5555-4555-8555-555555555555',
 };
 
+// Production guard. The seed truncates and rewrites real tables; running it
+// against a deployed database would erase live data. Both checks must pass:
+// NODE_ENV must not be 'production', and ALLOW_SEED must be the literal
+// string 'true'. The double guard means a misconfigured NODE_ENV alone isn't
+// enough — the operator has to opt in explicitly.
+function assertSeedAllowed(): void {
+  if (process.env.NODE_ENV === 'production') {
+    console.error(
+      '[seed] refused: NODE_ENV=production. The seed script is destructive ' +
+      '(TRUNCATE) and must never run against a production database.',
+    );
+    process.exit(1);
+  }
+  if (process.env.ALLOW_SEED !== 'true') {
+    console.error(
+      '[seed] refused: ALLOW_SEED is not set to "true". Re-run with ' +
+      'ALLOW_SEED=true to confirm you intend to wipe and reseed the target ' +
+      'database (DATABASE_URL=' + (process.env.DATABASE_URL ? '<set>' : '<unset>') + ').',
+    );
+    process.exit(1);
+  }
+}
+
 async function seed() {
+  assertSeedAllowed();
+
   const now = Date.now();
 
   console.log('[seed] truncating existing data…');

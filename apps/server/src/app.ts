@@ -19,8 +19,26 @@ const CROWD_DURATION_MS = 24 * 60 * 60 * 1000;
 export function buildApp(): FastifyInstance {
   const server = fastify({ logger: true });
 
-  // CORS configuration from environment variable
-  const corsOrigin = process.env.CORS_ORIGIN || '*';
+  // CORS configuration. In production CORS_ORIGIN must be set explicitly
+  // (no wildcard). Outside production we default to '*' so local dev and
+  // tests don't need configuration. Comma-separated values become an array.
+  const isProduction = process.env.NODE_ENV === 'production';
+  const rawCorsOrigin = process.env.CORS_ORIGIN;
+
+  if (isProduction && (!rawCorsOrigin || rawCorsOrigin === '*')) {
+    throw new Error(
+      'CORS_ORIGIN must be set to an explicit origin (or comma-separated ' +
+      'list) when NODE_ENV=production. Wildcard is refused. Set it via ' +
+      "`fly secrets set CORS_ORIGIN='https://your-frontend.example'`.",
+    );
+  }
+
+  const corsOrigin: string | string[] = rawCorsOrigin
+    ? rawCorsOrigin.includes(',')
+      ? rawCorsOrigin.split(',').map((o) => o.trim()).filter(Boolean)
+      : rawCorsOrigin
+    : '*';
+
   server.register(cors, {
     origin: corsOrigin,
   });

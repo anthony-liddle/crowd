@@ -52,10 +52,7 @@ EXPOSE 8080
 
 WORKDIR /app/apps/server
 
-# A failed migration must abort startup (set -e + no `||` swallow). In Phase C
-# this will be split: migrations move to Fly.io's release_command and the start
-# command will run the server only.
-RUN echo '#!/bin/sh\nset -e\npnpm migrate\npnpm start' > /app/apps/server/start.sh && \
-    chmod +x /app/apps/server/start.sh
-
-CMD ["/app/apps/server/start.sh"]
+# Migrations run as Fly.io's release_command (see fly.toml), not on container
+# start. That way a failed migration aborts the deploy before the new release
+# takes traffic, and the previous machine keeps serving.
+CMD ["pnpm", "start"]

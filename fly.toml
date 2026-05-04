@@ -1,0 +1,46 @@
+# Fly.io configuration for the dev deployment of crowd's server.
+#
+# This is the dev environment only — production is deferred. When prod ships,
+# it'll be a second app (e.g. `crowd-prod`) with its own fly.toml, not a new
+# piece of architecture.
+
+app = "crowd-dev"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+  # Selects the `prod` stage from the multi-stage Dockerfile. Without this,
+  # Fly would build the last stage in the file by accident — works today but
+  # fragile if stage ordering ever changes.
+  build-target = "prod"
+
+[deploy]
+  # Migrations run before the new release accepts traffic. If migrate fails,
+  # the deploy aborts and the previous machine keeps serving — same fail-loud
+  # discipline as the DATABASE_URL/CORS_ORIGIN startup guards.
+  release_command = "pnpm --filter @app/server migrate"
+
+[env]
+  PORT = "8080"
+  HOST = "0.0.0.0"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512
