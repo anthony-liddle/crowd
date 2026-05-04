@@ -18,7 +18,7 @@
         "ascAppId": "6766116979",
         "ascApiKeyPath": "./api-key.p8",
         "ascApiKeyId": "$ASC_API_KEY_ID",
-        "ascApiIssuerId": "$ASC_API_ISSUER_ID"
+        "ascApiKeyIssuerId": "$ASC_API_ISSUER_ID"
       }
     }
   },
