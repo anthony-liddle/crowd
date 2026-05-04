@@ -71,17 +71,19 @@ There's a single deployed environment right now: **dev**. Production is deferred
 | Server (Fly.io) | https://crowd-dev.fly.dev |
 | Server health check | https://crowd-dev.fly.dev/health |
 | Devtools (Vercel) | https://crowd-dev-devtools.vercel.app |
+| Mobile (TestFlight) | invite-only; testers added in App Store Connect → Crowd → TestFlight → Internal Testing |
 
 The Fly machine scales to zero when idle (`auto_stop_machines = "stop"` in `fly.toml`), so the first request after a quiet period has a ~1-2 second cold start.
 
 ### How automatic deploys work
 
-Two workflows in `.github/workflows/` deploy to dev on merge to `main`, gated by path filters so unrelated changes don't trigger redeploys:
+Three workflows in `.github/workflows/` deploy to dev on merge to `main`, gated by path filters so unrelated changes don't trigger redeploys:
 
 | Workflow | Triggers when these change | What it does |
 | -------- | -------------------------- | ------------ |
 | `deploy-server.yml` | `apps/server/**`, `packages/shared/**`, `packages/api/**`, `Dockerfile`, `fly.toml` | `flyctl deploy --remote-only` (build on Fly's remote builder) |
 | `deploy-devtools.yml` | `apps/devtools/**`, `packages/shared/**`, `packages/api/**` | `vercel pull && vercel build && vercel deploy --prebuilt --prod` |
+| `deploy-mobile.yml` | `apps/mobile/**`, `packages/shared/**`, `packages/api/**` | `eas build --auto-submit` (build on EAS cloud, auto-submit to TestFlight) |
 
 A `concurrency:` mutex prevents overlapping deploys per workflow — a second push queues until the first finishes.
 
@@ -97,14 +99,17 @@ Vercel's GitHub integration still produces a preview deploy for every PR branch 
 | ------ | --------- | ------- |
 | `FLY_API_TOKEN` | GitHub Actions secrets | `deploy-server.yml` |
 | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | GitHub Actions secrets | `deploy-devtools.yml` |
+| `EXPO_TOKEN`, `APPLE_ID`, `APPLE_TEAM_ID` | GitHub Actions secrets | `deploy-mobile.yml` |
+| `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, `ASC_API_KEY_P8` | GitHub Actions secrets | `deploy-mobile.yml` (App Store Connect API key for non-interactive submit) |
 | `DATABASE_URL`, `CORS_ORIGIN` | Fly.io secrets store | server runtime |
 | `VITE_API_BASE_URL` | Vercel project env vars | devtools build |
+| Apple Distribution Certificate, iOS Provisioning Profile | EAS credential vault | EAS Build's iOS signing |
 
-Secrets never live in committed files. Fly secrets and Vercel env vars are set out-of-band via the respective CLIs / dashboards.
+Secrets never live in committed files. Fly secrets, Vercel env vars, EAS credentials, and the App Store Connect `.p8` file are all set out-of-band via the respective CLIs / dashboards. The `.p8` private key is also gitignored at the repo root (`*.p8` rule) — defensive belt-and-suspenders in case someone manually creates one locally.
 
 ### Manual deploy (escape hatch)
 
-If you need to deploy outside the workflow — diagnosing a CI issue, rolling back urgently, etc. — both targets accept manual deploys:
+If you need to deploy outside the workflow — diagnosing a CI issue, rolling back urgently, etc. — all three targets accept manual deploys:
 
 ```bash
 # Server
@@ -113,9 +118,18 @@ fly deploy                    # builds with target=prod, runs release_command, r
 # Devtools
 cd apps/devtools
 vercel deploy --prod          # uses local credentials; requires `vercel login` first
+
+# Mobile
+cd apps/mobile
+eas build --profile dev-deployed --platform ios   # build only
+eas submit --platform ios --latest                # then submit the latest build to TestFlight
+# or combine:
+eas build --profile dev-deployed --platform ios --auto-submit
 ```
 
-For rollback specifically, Fly tracks every release with a digest visible in `fly status`. Roll back with `fly releases rollback <number>` from `fly releases list`.
+For rollback:
+- **Fly** tracks every release with a digest visible in `fly status`. Roll back with `fly releases rollback <number>` from `fly releases list`.
+- **TestFlight** doesn't roll back per se — instead, "expire" the bad build in App Store Connect → TestFlight → Builds (testers can no longer install it) and ship a new one with the fix. Build numbers must monotonically increase per Apple's requirement, so a "rollback" is really a forward-fix.
 
 ### Updating Fly secrets
 
@@ -135,9 +149,38 @@ fly secrets set DATABASE_URL="$FLY_DB"
 unset FLY_DB
 ```
 
-### Mobile builds
+### Mobile builds and TestFlight
 
-Phase D (TestFlight setup) is not yet wired. `apps/mobile/eas.json` defines a single `dev-deployed` build profile that bakes `EXPO_PUBLIC_API_URL=https://crowd-dev.fly.dev` into the binary. Building with `eas build --profile dev-deployed --platform ios` is syntactically valid today but requires Apple Developer / TestFlight credentials that haven't been configured yet.
+iOS builds happen on EAS Build's cloud, not on your laptop and not on the GitHub Actions runner. `deploy-mobile.yml` orchestrates: install dependencies, write the App Store Connect API key file, invoke `eas build --auto-submit`. EAS Build does the actual iOS compile and signing; EAS Submit uploads the resulting `.ipa` to App Store Connect, which routes it to TestFlight.
+
+**Bundle ID and ASC record**: `dev.anthonyliddle.crowd` (reserved at developer.apple.com). The App Store Connect record's numeric `ascAppId` (`6766116979`) is in `apps/mobile/eas.json`'s submit profile. Both are permanent; changing either would require a new TestFlight history.
+
+**Build profile**: `apps/mobile/eas.json` defines `dev-deployed` for both build and submit. The build bakes `EXPO_PUBLIC_API_URL=https://crowd-dev.fly.dev` into the binary at compile time (Expo inlines `EXPO_PUBLIC_*` into the JS bundle), `distribution: store` produces an App Store-signed binary that TestFlight accepts, and `autoIncrement: true` bumps the iOS `buildNumber` per build (Apple requires monotonically increasing numbers across all uploads to a given app).
+
+**Version numbers**:
+- The marketing version (`expo.version` in `app.json` — currently `1.0.0`) is the user-facing "App Version" string in TestFlight. Bump it manually when you ship a new public-facing version.
+- The build number is managed by EAS's remote version source (`cli.appVersionSource: "remote"` in `eas.json`). EAS stores the last-used build number on its servers; each new build increments. No `app.json` diff to commit.
+
+**Wall-clock from push to installable build**: realistically 30-60 minutes. ~5 min on the GitHub runner, ~15-30 min on EAS Build's cloud, ~10-30 min on Apple's processing. Most of this is async — the workflow uses `--no-wait` so the runner returns after queuing the build, and Apple's processing is server-side. You're notified when the build lands on TestFlight (TestFlight push + email).
+
+**Adding a new tester**:
+
+1. Open https://appstoreconnect.apple.com → **Apps** → **Crowd** → **TestFlight** tab.
+2. Sidebar: **Internal Testing** → click **Crowd Internal** (the group set up in Phase D).
+3. Click **Testers** → **+** → **Invite New Testers** → paste the tester's Apple ID email.
+4. They get a TestFlight invite by email. After accepting and installing TestFlight on their phone, the latest build is available immediately (auto-distribution is enabled on the group).
+
+Internal testers max out at 100 per Apple. External testing (which adds Apple's review step) is out of scope for the dev environment.
+
+**Local manual builds**: when iterating on something that needs a real device or you want to skip CI, `eas build` from `apps/mobile/` works the same way as the workflow does. EAS has your Apple distribution certificate stored from initial setup; no re-prompt for credentials. The local build still runs on EAS's cloud.
+
+**Manual submit** is the same: `eas submit --platform ios --latest` uploads the most recent successful EAS build to App Store Connect → TestFlight.
+
+**Why the build can't run on a GitHub runner**: iOS builds require Xcode and a macOS environment. EAS Build provides this; GitHub Actions Linux runners can't. The workflow's job is orchestration only — it never has Xcode and never compiles native code.
+
+**The `.p8` API key file in CI**: the workflow writes `apps/mobile/api-key.p8` from the `ASC_API_KEY_P8` GitHub secret at run-time, gitignored via the root `*.p8` rule. The file lives only on the ephemeral runner during the build. Apple's authentication uses a JWT signed with this private key — no Apple ID prompt, no app-specific password, fully non-interactive.
+
+**Build credentials managed by EAS**: the iOS distribution certificate and provisioning profile live in EAS's encrypted credential vault, not on your laptop or in the repo. Created once during the first interactive `eas build` setup; reused for every subsequent build. If they ever need rotation, `eas credentials` is the entry point.
 
 ## Development Workflow
 
