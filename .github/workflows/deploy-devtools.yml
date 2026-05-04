@@ -1,0 +1,56 @@
+# Deploys apps/devtools to Vercel on merge to main.
+#
+# Vercel's GitHub integration auto-deploy is disabled via the project's
+# Ignored Build Step (skips builds when VERCEL_GIT_COMMIT_REF == main).
+# This workflow is the single source of truth for production deploys;
+# Vercel still produces preview deploys for PR branches automatically.
+#
+# Path filter: only fires when devtools or its workspace deps change.
+# A server-only change shouldn't trigger a Vercel deploy.
+#
+# Build strategy: vercel CLI's prebuilt-deploy flow. We pull the project's
+# config (env vars, build command, root directory) with `vercel pull`,
+# build with `vercel build --prod`, then deploy the prebuilt output with
+# `vercel deploy --prebuilt --prod`. The `--prebuilt` flag means Vercel
+# doesn't rebuild server-side — it just publishes the .vercel/output
+# directory we just produced.
+
+name: Deploy Devtools
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/devtools/**'
+      - 'packages/shared/**'
+      - 'packages/api/**'
+      - '.github/workflows/deploy-devtools.yml'
+
+jobs:
+  deploy:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    concurrency: deploy-devtools
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/devtools
+      - name: Build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/devtools
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/devtools
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

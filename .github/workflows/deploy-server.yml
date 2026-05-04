@@ -1,0 +1,37 @@
+# Deploys apps/server to Fly.io on merge to main.
+#
+# Path filter: only fires when something in the server's image dependency
+# graph changes (server source, shared workspace deps, the Dockerfile, or
+# the Fly config). A touch to apps/mobile or apps/devtools won't redeploy.
+#
+# Concurrency: at most one server deploy runs at a time; a second push
+# queues until the first finishes (default, not cancel-in-progress).
+#
+# Build strategy: --remote-only ships the Docker context to Fly's remote
+# builder rather than building on the GitHub runner. Faster, uses Fly's
+# layer cache, sidesteps GitHub-runner Docker quirks.
+
+name: Deploy Server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/server/**'
+      - 'packages/shared/**'
+      - 'packages/api/**'
+      - 'Dockerfile'
+      - 'fly.toml'
+      - '.github/workflows/deploy-server.yml'
+
+jobs:
+  deploy:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-latest
+    concurrency: deploy-server
+    steps:
+      - uses: actions/checkout@v6
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
