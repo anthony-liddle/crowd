@@ -11,6 +11,7 @@ The reports document what shipped, what was discovered along the way, and what e
 | A | Repository hygiene before deploy setup | [PR #56](https://github.com/anthony-liddle/crowd/pull/56) (no written report) |
 | B | Local development with docker-compose and seed script | [PR #57](https://github.com/anthony-liddle/crowd/pull/57) (no written report) |
 | C | Cloud dev environment: Neon, Fly.io, Vercel, GitHub Actions | [phase-c.md](./phase-c.md) |
+| D | EAS Build and TestFlight automation for the iOS mobile app | [phase-d.md](./phase-d.md) |
 
 Phase C is the first phase with a written report; A and B are linked to their merge PRs since the work shipped without a standalone writeup. Future phases get a row here pointing at a sibling `phase-<letter>.md`.
 
