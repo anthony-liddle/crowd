@@ -274,7 +274,18 @@ locations during the bundle process. Without these lines the mobile
 bundle fails with "Cannot find module @babel/..." errors that look
 unrelated to pnpm.
 
-If you're tempted to clean either of these up, run `pnpm --filter @app/mobile start` first and confirm the bundle still completes — and also test on a fresh `node_modules` (delete and reinstall), because hoisting decisions stick.
+### `public-hoist-pattern[]=*react-native-worklets*` in `.npmrc`
+
+`react-native-worklets` is a transitive dep of `react-native-reanimated@4.x`.
+CocoaPods' `RNReanimated.podspec` does a plain Node `require.resolve('react-native-worklets/package.json')`
+during `pod install`, walking up `node_modules` from `apps/mobile/ios/`.
+Without this hoist, pnpm buries the package in `.pnpm/...` where Node's
+walking-up resolver can't reach it, and `pod install` (and therefore EAS
+Build's prebuild) fails with "Cannot find module 'react-native-worklets/package.json'".
+Local Metro bundling works fine without this — the failure is CocoaPods-only,
+which is why it doesn't surface until you build a native binary.
+
+If you're tempted to clean any of these up, run `pnpm --filter @app/mobile start` first and confirm the bundle still completes — and also test on a fresh `node_modules` (delete and reinstall), because hoisting decisions stick. For the worklets entry specifically, the only way to verify is a real EAS Build (or a local `pod install` after `expo prebuild`), since the failure mode is in CocoaPods, not Metro.
 
 ## Reporting Issues
 
