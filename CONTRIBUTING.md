@@ -60,6 +60,85 @@ pnpm dev:seed                        # still works — same DATABASE_URL
 - `dev:down` is the default. Volumes persist, so the next `dev:up` is fast and your seed data is still there.
 - `dev:reset` when: you change `pnpm-lock.yaml` (the named `node_modules` volume is stale), Postgres data looks wrong, or you want to verify a true cold-start.
 
+## Deployment
+
+There's a single deployed environment right now: **dev**. Production is deferred — when it ships it'll be a second set of resources (a `crowd-prod` Fly app, a separate Neon project, a separate Vercel project) provisioned with the same `fly.toml`, the same Dockerfile, the same workflows. No new architecture.
+
+### Live URLs
+
+| What | URL |
+| ---- | --- |
+| Server (Fly.io) | https://crowd-dev.fly.dev |
+| Server health check | https://crowd-dev.fly.dev/health |
+| Devtools (Vercel) | https://crowd-dev-devtools.vercel.app |
+
+The Fly machine scales to zero when idle (`auto_stop_machines = "stop"` in `fly.toml`), so the first request after a quiet period has a ~1-2 second cold start.
+
+### How automatic deploys work
+
+Two workflows in `.github/workflows/` deploy to dev on merge to `main`, gated by path filters so unrelated changes don't trigger redeploys:
+
+| Workflow | Triggers when these change | What it does |
+| -------- | -------------------------- | ------------ |
+| `deploy-server.yml` | `apps/server/**`, `packages/shared/**`, `packages/api/**`, `Dockerfile`, `fly.toml` | `flyctl deploy --remote-only` (build on Fly's remote builder) |
+| `deploy-devtools.yml` | `apps/devtools/**`, `packages/shared/**`, `packages/api/**` | `vercel pull && vercel build && vercel deploy --prebuilt --prod` |
+
+A `concurrency:` mutex prevents overlapping deploys per workflow — a second push queues until the first finishes.
+
+Migrations run as Fly's `release_command` (a one-shot machine that boots the new image, runs `pnpm --filter @app/server migrate`, exits). If it fails, the deploy aborts and the previous machine keeps serving traffic.
+
+### Vercel preview deploys
+
+Vercel's GitHub integration still produces a preview deploy for every PR branch — that path isn't disabled. What *is* disabled is the integration's production deploy on push to `main` (via `apps/devtools/vercel.json`'s Ignored Build Step in the project settings), so production is only ever produced by the workflow. Single source of truth.
+
+### Where secrets live
+
+| Secret | Stored in | Used by |
+| ------ | --------- | ------- |
+| `FLY_API_TOKEN` | GitHub Actions secrets | `deploy-server.yml` |
+| `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | GitHub Actions secrets | `deploy-devtools.yml` |
+| `DATABASE_URL`, `CORS_ORIGIN` | Fly.io secrets store | server runtime |
+| `VITE_API_BASE_URL` | Vercel project env vars | devtools build |
+
+Secrets never live in committed files. Fly secrets and Vercel env vars are set out-of-band via the respective CLIs / dashboards.
+
+### Manual deploy (escape hatch)
+
+If you need to deploy outside the workflow — diagnosing a CI issue, rolling back urgently, etc. — both targets accept manual deploys:
+
+```bash
+# Server
+fly deploy                    # builds with target=prod, runs release_command, rolls out
+
+# Devtools
+cd apps/devtools
+vercel deploy --prod          # uses local credentials; requires `vercel login` first
+```
+
+For rollback specifically, Fly tracks every release with a digest visible in `fly status`. Roll back with `fly releases rollback <number>` from `fly releases list`.
+
+### Updating Fly secrets
+
+`fly secrets set` against a running app triggers a rolling restart automatically. Health-check gating means a failed startup (e.g., a syntactically valid but wrong `DATABASE_URL`) keeps the previous machine serving:
+
+```bash
+fly secrets set CORS_ORIGIN='https://example.com'        # rolling restart
+fly secrets unset SOME_KEY                               # rolling restart
+fly secrets list                                         # digests only, never values
+```
+
+For sensitive values, consider `read -rs` to avoid leaking the secret into shell history:
+
+```bash
+read -rs FLY_DB                                          # paste, enter — silent, no history
+fly secrets set DATABASE_URL="$FLY_DB"
+unset FLY_DB
+```
+
+### Mobile builds
+
+Phase D (TestFlight setup) is not yet wired. `apps/mobile/eas.json` defines a single `dev-deployed` build profile that bakes `EXPO_PUBLIC_API_URL=https://crowd-dev.fly.dev` into the binary. Building with `eas build --profile dev-deployed --platform ios` is syntactically valid today but requires Apple Developer / TestFlight credentials that haven't been configured yet.
+
 ## Development Workflow
 
 ### Branch Naming
@@ -121,12 +200,28 @@ crowd/
 
 ## Environment Variables
 
-The project uses environment variables for configuration. See `.env.example` for required variables:
+Each app has a `.env.example` next to it documenting the variables that app needs. The defaults match the docker-compose stack, so for typical local dev you don't need to copy them to `.env`.
 
-- `DATABASE_URL` - PostgreSQL connection string
-- `PORT` - Server port (default: 8080)
-- `HOST` - Server host (default: 0.0.0.0)
-- `CORS_ORIGIN` - CORS origin setting (default: *)
+Server variables (`apps/server/.env.example`):
+
+- `DATABASE_URL` — PostgreSQL connection string. **Required in production**: the server throws at module load if unset when `NODE_ENV=production`.
+- `PORT` — HTTP listen port (default: `8080`).
+- `HOST` — HTTP listen host (default: `0.0.0.0`; required for containers).
+- `CORS_ORIGIN` — explicit origin or comma-separated list. **Required in production**: the server refuses to start with `*` or unset when `NODE_ENV=production`. Defaults to `*` for local dev convenience.
+
+Devtools variables (`apps/devtools/.env.example`):
+
+- `VITE_API_BASE_URL` — base URL the devtools app hits. Vite inlines `VITE_*` vars into the client bundle at build time.
+
+Mobile variables (`apps/mobile/.env.example`):
+
+- `EXPO_PUBLIC_API_URL` — base URL the mobile app hits. Expo inlines `EXPO_PUBLIC_*` vars at bundle time. Leave unset for local dev (auto-detects via `Constants.expoConfig?.hostUri`); set to override for deployed servers.
+
+Production guards on the server:
+
+- `apps/server/src/db/index.ts` throws if `NODE_ENV=production` and `DATABASE_URL` is unset.
+- `apps/server/src/app.ts` throws if `NODE_ENV=production` and `CORS_ORIGIN` is unset or `*`.
+- `apps/server/src/scripts/seed.ts` refuses to run unless `NODE_ENV !== production` AND `ALLOW_SEED=true`. It's destructive (TRUNCATE), so the double guard is intentional.
 
 ## Common Tasks
 
