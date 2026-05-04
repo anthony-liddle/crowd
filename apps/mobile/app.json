@@ -17,6 +17,7 @@
       "**/*"
     ],
     "ios": {
+      "bundleIdentifier": "dev.anthonyliddle.crowd",
       "supportsTablet": true
     },
     "android": {
