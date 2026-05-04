@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,17 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  Linking,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Controller, useForm } from 'react-hook-form';
 import Toast from 'react-native-toast-message';
 import { useColorScheme } from 'nativewind';
 import { createMessage, getMyCrowds } from '@/services/api';
 import { CreateMessagePayload, Crowd, FeedSource, TabNavigationProp } from '@/types';
-import { useLocation } from '@/hooks/useLocation';
+import { useLocation, LocationFetchError } from '@/hooks/useLocation';
 import { ThemedSlider } from '@/components/ThemedSlider';
 import { ReachPreview } from '@/components/ReachPreview';
 import { PrimaryButton } from '@/components/Buttons';
@@ -63,8 +66,16 @@ export const CreateMessageScreen: React.FC = () => {
   const placeholderColor = isDark ? '#5A554B' : '#A09B91';
   const selectionColor = isDark ? '#D08454' : '#B85A2C';
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { location, errorMsg: locationError, loading: locationLoading } = useLocation();
+  type SubmitState = 'idle' | 'locating' | 'submitting';
+  const [submitState, setSubmitState] = useState<SubmitState>('idle');
+  const [showLocatingLabel, setShowLocatingLabel] = useState(false);
+  const locatingLabelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (locatingLabelTimer.current) clearTimeout(locatingLabelTimer.current);
+    };
+  }, []);
+  const { getFreshLocation } = useLocation();
 
   const [crowds, setCrowds] = useState<Crowd[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<FeedSource>({ id: null, name: 'Everyone' });
@@ -94,37 +105,72 @@ export const CreateMessageScreen: React.FC = () => {
   const charCount = text?.length ?? 0;
   const isEmpty = (text ?? '').trim().length === 0;
 
+  const showLocationError = useCallback(async (error: LocationFetchError) => {
+    if (error === 'permission_denied') {
+      // Try in-app re-prompt first; if hard-revoked, OS returns the same status
+      // and we point the user to Settings.
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        Toast.show({
+          type: 'info',
+          text1: 'Permission granted',
+          text2: 'Tap Post again to share.',
+        });
+        return;
+      }
+      Alert.alert(
+        'Location required',
+        'Crowd needs location access to post. Open Settings to grant permission.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ],
+      );
+      return;
+    }
+
+    Toast.show({
+      type: 'error',
+      text1: "Couldn't get your location",
+      text2: 'Make sure GPS is on, then try again.',
+    });
+  }, []);
+
   const onSubmit = async (data: FormData) => {
-    if (locationLoading) {
-      Toast.show({ type: 'info', text1: 'Locating you', text2: 'Try again in a moment.' });
-      return;
-    }
-    if (locationError) {
-      Toast.show({ type: 'error', text1: 'Location error', text2: locationError });
-      return;
-    }
     if (data.text.trim().length === 0) {
       Toast.show({ type: 'error', text1: 'Empty post', text2: 'Write something first.' });
       return;
     }
 
-    setIsSubmitting(true);
+    setSubmitState('locating');
+    locatingLabelTimer.current = setTimeout(() => setShowLocatingLabel(true), 1000);
+
+    const result = await getFreshLocation();
+
+    if (locatingLabelTimer.current) {
+      clearTimeout(locatingLabelTimer.current);
+      locatingLabelTimer.current = null;
+    }
+    setShowLocatingLabel(false);
+
+    if (!result.ok) {
+      setSubmitState('idle');
+      showLocationError(result.error);
+      return;
+    }
+
+    setSubmitState('submitting');
     try {
       const payload: CreateMessagePayload = {
         text: data.text.trim(),
         duration: Math.round(data.lifespanMin),
         distance: Math.round(data.reachKm * 1000),
       };
-      await createMessage(
-        payload,
-        location
-          ? {
-              latitude: location.latitude,
-              longitude: location.longitude,
-              crowdId: selectedTarget.id || undefined,
-            }
-          : undefined
-      );
+      await createMessage(payload, {
+        latitude: result.location.latitude,
+        longitude: result.location.longitude,
+        crowdId: selectedTarget.id || undefined,
+      });
       Toast.show({ type: 'success', text1: 'Posted', text2: 'It’s out there.' });
       setTimeout(() => {
         navigation.navigate('Feed');
@@ -134,11 +180,18 @@ export const CreateMessageScreen: React.FC = () => {
       console.error('Error creating message:', error);
       Toast.show({ type: 'error', text1: 'Failed to post', text2: 'Try again.' });
     } finally {
-      setIsSubmitting(false);
+      setSubmitState('idle');
     }
   };
 
-  const submitDisabled = isSubmitting || isEmpty;
+  const isBusy = submitState !== 'idle';
+  const submitDisabled = isBusy || isEmpty;
+  const submitLabel =
+    submitState === 'submitting'
+      ? 'Posting…'
+      : submitState === 'locating' && showLocatingLabel
+        ? 'Locating…'
+        : 'Post';
 
   return (
     <KeyboardAvoidingView
@@ -270,7 +323,7 @@ export const CreateMessageScreen: React.FC = () => {
           <View style={{ marginTop: 6 }}>
             <View style={{ opacity: submitDisabled ? 0.5 : 1 }}>
               <PrimaryButton
-                label={isSubmitting ? 'Posting…' : 'Post'}
+                label={submitLabel}
                 onPress={handleSubmit(onSubmit)}
                 disabled={submitDisabled}
               />
