@@ -1,0 +1,13 @@
+{
+  "build": {
+    "dev-deployed": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://crowd-dev.fly.dev"
+      }
+    }
+  }
+}
