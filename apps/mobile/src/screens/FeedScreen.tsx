@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, FlatList, RefreshControl } from 'react-native';
+import { View, Text, FlatList, RefreshControl } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
 import { Message, Crowd, FeedSource, TabNavigationProp } from '@/types';
@@ -9,9 +9,11 @@ import { PostCard } from '@/components/PostCard';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SortFeed } from '@/components/SortFeed';
 import { EmptyFeed } from '@/components/EmptyFeed';
+import { Concentric } from '@/components/Concentric';
+import { PrimaryButton } from '@/components/Buttons';
 import { RelaySheet } from '@/components/RelaySheet';
 import { FeedSourceSelector } from '@/components/FeedSourceSelector';
-import { useLocation } from '@/hooks/useLocation';
+import { useLocation, LocationFetchError } from '@/hooks/useLocation';
 import { useRelaySettings } from '@/hooks/useRelaySettings';
 import { useThemedRefreshTint } from '@/hooks/useThemedRefreshTint';
 
@@ -21,18 +23,18 @@ export const FeedScreen: React.FC = () => {
   const navigation = useNavigation<TabNavigationProp>();
   const refreshTint = useThemedRefreshTint();
 
+  type FeedState =
+    | { kind: 'locating' }
+    | { kind: 'loading' }
+    | { kind: 'ready' }
+    | { kind: 'error'; error: LocationFetchError };
   const [messages, setMessages] = useState<Message[]>([]);
-  const [_loading, setLoading] = useState(true);
+  const [feedState, setFeedState] = useState<FeedState>({ kind: 'locating' });
   const [refreshing, setRefreshing] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('nearest');
   const [now, setNow] = useState(() => Date.now());
 
-  const {
-    location,
-    errorMsg: locationError,
-    loading: locationLoading,
-    refreshLocation,
-  } = useLocation();
+  const { getFreshLocation } = useLocation();
 
   const [crowds, setCrowds] = useState<Crowd[]>([]);
   const [selectedFeed, setSelectedFeed] = useState<FeedSource>({ id: null, name: 'Global' });
@@ -81,46 +83,60 @@ export const FeedScreen: React.FC = () => {
     }
   }, []);
 
+  // Single source of truth for cold-open + refresh: fetch fresh location, then
+  // issue the feed query. No fallback to a cached/stale snapshot — the whole
+  // point of the bug fix is that location is always fresh at action time.
   const loadMessages = useCallback(async () => {
-    if (!location && !locationError && locationLoading) return;
+    setFeedState((s) => (s.kind === 'ready' ? s : { kind: 'locating' }));
+    const result = await getFreshLocation();
+    if (!result.ok) {
+      setFeedState({ kind: 'error', error: result.error });
+      setRefreshing(false);
+      return;
+    }
+    setFeedState((s) => (s.kind === 'ready' ? s : { kind: 'loading' }));
     try {
-      if (!refreshing) setLoading(true);
-      const data = await getMessages(location ? {
-        latitude: location.latitude,
-        longitude: location.longitude,
+      const data = await getMessages({
+        latitude: result.location.latitude,
+        longitude: result.location.longitude,
         sortBy,
         crowdId: selectedFeed.id || undefined,
-      } : undefined);
+      });
       setMessages(data);
+      setFeedState({ kind: 'ready' });
     } catch (error) {
       console.error('Error loading messages:', error);
+      setFeedState({ kind: 'ready' });
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  }, [location, locationError, locationLoading, refreshing, sortBy, selectedFeed]);
+  }, [getFreshLocation, sortBy, selectedFeed]);
 
   useEffect(() => {
-    if (!locationLoading) loadMessages();
-  }, [loadMessages, locationLoading, location, locationError, sortBy, selectedFeed]);
+    loadMessages();
+  }, [loadMessages]);
 
   useFocusEffect(
     useCallback(() => {
       loadCrowds();
-      if (!locationLoading) loadMessages();
-    }, [loadCrowds, loadMessages, locationLoading])
+      loadMessages();
+    }, [loadCrowds, loadMessages])
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refreshLocation();
     await loadCrowds();
     await loadMessages();
-  }, [loadMessages, refreshLocation, loadCrowds]);
+  }, [loadMessages, loadCrowds]);
 
   const performRelay = useCallback(async (message: Message) => {
-    if (!location) {
-      Toast.show({ type: 'info', text1: 'Locating you', text2: 'Try again in a moment.' });
+    const result = await getFreshLocation();
+    if (!result.ok) {
+      Toast.show({
+        type: 'error',
+        text1: "Couldn't get your location",
+        text2: 'Make sure GPS is on, then try again.',
+      });
       return;
     }
     // Mark the gesture taught locally before the network round-trip — the hint
@@ -130,8 +146,8 @@ export const FeedScreen: React.FC = () => {
     await markRelayed();
     try {
       await boostMessage(message.id, message.expiresAt, {
-        latitude: location.latitude,
-        longitude: location.longitude,
+        latitude: result.location.latitude,
+        longitude: result.location.longitude,
         crowdId: selectedFeed.id || undefined,
       });
       Toast.show({ type: 'success', text1: 'Relayed', text2: 'Now visible to people near you.' });
@@ -139,7 +155,7 @@ export const FeedScreen: React.FC = () => {
     } catch (error) {
       Toast.show({ type: 'error', text1: 'Relay failed', text2: 'Could not relay this post.' });
     }
-  }, [location, selectedFeed, markRelayed, loadMessages]);
+  }, [getFreshLocation, selectedFeed, markRelayed, loadMessages]);
 
   const handleRelay = useCallback((message: Message) => {
     performRelay(message);
@@ -161,6 +177,63 @@ export const FeedScreen: React.FC = () => {
   ];
 
   const meta = `${visibleMessages.length} ${visibleMessages.length === 1 ? 'post' : 'posts'} near you`;
+
+  // While fresh location is in flight on cold open, render a skeleton instead
+  // of the empty state — "Nothing nearby" before data lands reads as wrong.
+  const isInitialLoading =
+    (feedState.kind === 'locating' || feedState.kind === 'loading') &&
+    visibleMessages.length === 0 &&
+    !refreshing;
+  const isInitialError = feedState.kind === 'error' && visibleMessages.length === 0;
+
+  const renderEmpty = () => {
+    if (isInitialLoading) {
+      return (
+        <View
+          className="flex-1 items-center justify-center px-screen-x"
+          style={{ paddingVertical: 48 }}
+        >
+          <Concentric size={110} centerLit={false} showOuterDots={false} />
+          <Text
+            className="font-serif text-title text-ink dark:text-ink-d"
+            style={{ marginTop: 24, textAlign: 'center' }}
+          >
+            Finding posts near you…
+          </Text>
+        </View>
+      );
+    }
+    if (isInitialError && feedState.kind === 'error') {
+      const message =
+        feedState.error === 'permission_denied'
+          ? 'Crowd needs location access to show nearby posts.'
+          : "We couldn't get your location. Make sure GPS is on, then try again.";
+      return (
+        <View
+          className="flex-1 items-center justify-center px-screen-x"
+          style={{ paddingVertical: 48 }}
+        >
+          <Concentric size={110} centerLit={false} showOuterDots={false} />
+          <Text
+            className="font-serif text-title text-ink dark:text-ink-d"
+            style={{ marginTop: 24, textAlign: 'center' }}
+          >
+            Can’t find you
+          </Text>
+          <Text
+            className="font-sans text-body text-dust dark:text-dust-d"
+            style={{ marginTop: 8, textAlign: 'center', maxWidth: 260 }}
+          >
+            {message}
+          </Text>
+          <View style={{ marginTop: 24, width: '100%', maxWidth: 240 }}>
+            <PrimaryButton label="Try again" onPress={loadMessages} />
+          </View>
+        </View>
+      );
+    }
+    return <EmptyFeed onPostPress={() => navigation.navigate('Post')} />;
+  };
 
   return (
     <View className="flex-1 bg-paper dark:bg-paper-d">
@@ -195,9 +268,7 @@ export const FeedScreen: React.FC = () => {
             colors={[refreshTint]}
           />
         }
-        ListEmptyComponent={
-          <EmptyFeed onPostPress={() => navigation.navigate('Post')} />
-        }
+        ListEmptyComponent={renderEmpty()}
       />
 
       <RelaySheet
