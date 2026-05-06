@@ -123,24 +123,3 @@ export const deleteCrowdUserId = async (crowdId: string): Promise<void> => {
   }
 };
 
-/**
- * Retrieves all crowd-specific user IDs.
- * @returns A record mapping crowd IDs to user IDs.
- */
-export const getAllCrowdUserIds = async (): Promise<Record<string, string>> => {
-  try {
-    const stored = await SecureStore.getItemAsync(CROWD_USER_IDS_KEY);
-    if (!stored) return {};
-
-    try {
-      return JSON.parse(stored);
-    } catch (parseError) {
-      console.error('Failed to parse crowd user IDs, resetting:', parseError);
-      await SecureStore.deleteItemAsync(CROWD_USER_IDS_KEY);
-      return {};
-    }
-  } catch (error) {
-    console.error('Error retrieving crowd user identities:', error);
-    return {};
-  }
-};

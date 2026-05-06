@@ -7,12 +7,11 @@ import {
   Crowd, 
   CreateCrowdPayload 
 } from '@/types';
-import { 
-  getOrGenerateUserId, 
-  updateRotationClock, 
-  getOrGenerateCrowdUserId, 
-  deleteCrowdUserId, 
-  getAllCrowdUserIds 
+import {
+  getOrGenerateUserId,
+  updateRotationClock,
+  getOrGenerateCrowdUserId,
+  deleteCrowdUserId,
 } from '@/utils/identity';
 import { addMyMessage, addBoostedMessage } from '@/utils/storage';
 
@@ -190,28 +189,13 @@ export const boostMessage = async (messageId: string, expiresAt: string, params?
  */
 export const createCrowd = async (payload: CreateCrowdPayload): Promise<Crowd> => {
   try {
-    // Create crowd with main user ID (this sets ownerId and creates initial membership)
-    const mainUserId = await getOrGenerateUserId();
+    const userId = await getOrGenerateUserId();
     const response = await api.crowds.create({
       name: payload.name,
       isOpen: payload.isOpen,
-      userId: mainUserId,
+      userId,
     });
 
-    // Generate and store crowd-specific ID for this crowd
-    const crowdUserId = await getOrGenerateCrowdUserId(response.id);
-    
-    // Update membership to use crowd-specific ID instead of main ID
-    // Note: ownerId in crowds table stays as mainUserId (historical record of creator)
-    try {
-      await api.crowds.leave(response.id, { userId: mainUserId });
-      await api.crowds.join(response.id, { userId: crowdUserId });
-    } catch (err) {
-      // If update fails, still store the crowd ID locally for future operations
-      console.warn('Failed to update membership with crowd-specific ID:', err);
-    }
-
-    // Return optimistic crowd object
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
@@ -219,7 +203,7 @@ export const createCrowd = async (payload: CreateCrowdPayload): Promise<Crowd> =
       id: response.id,
       name: payload.name,
       isOpen: payload.isOpen,
-      isOwner: true, // User is owner (ownerId matches mainUserId, even though membership uses crowdUserId)
+      isOwner: true,
       memberCount: 1,
       createdAt: now,
       expiresAt,
@@ -232,46 +216,22 @@ export const createCrowd = async (payload: CreateCrowdPayload): Promise<Crowd> =
 };
 
 /**
- * Get user's active crowds
- * Queries with main user ID and all crowd-specific IDs to find all crowds user belongs to
+ * Get user's active crowds.
  */
 export const getMyCrowds = async (): Promise<Crowd[]> => {
   try {
-    const mainUserId = await getOrGenerateUserId();
-    const crowdUserIds = await getAllCrowdUserIds();
-    // Query main user ID first to get correct isOwner status
-    const allUserIds = [mainUserId, ...Object.values(crowdUserIds)];
-
-    // Query crowds for each user ID and combine results
-    const allCrowds = new Map<string, Crowd>();
-    
-    for (const userId of allUserIds) {
-      try {
-        const dtos = await api.crowds.list(userId);
-        for (const dto of dtos) {
-          // Use crowd ID as key to avoid duplicates
-          // Prefer entries with isOwner=true when there are duplicates
-          const existing = allCrowds.get(dto.id);
-          if (!existing || (dto.isOwner && !existing.isOwner)) {
-            allCrowds.set(dto.id, {
-              id: dto.id,
-              name: dto.name,
-              isOpen: dto.isOpen,
-              isOwner: dto.isOwner,
-              memberCount: dto.memberCount,
-              createdAt: new Date(dto.createdAt),
-              expiresAt: new Date(dto.expiresAt),
-              canInvite: dto.canInvite,
-            });
-          }
-        }
-      } catch (err) {
-        // Continue with other user IDs if one fails
-        console.warn(`Failed to fetch crowds for user ID ${userId}:`, err);
-      }
-    }
-
-    return Array.from(allCrowds.values());
+    const userId = await getOrGenerateUserId();
+    const dtos = await api.crowds.list(userId);
+    return dtos.map((dto) => ({
+      id: dto.id,
+      name: dto.name,
+      isOpen: dto.isOpen,
+      isOwner: dto.isOwner,
+      memberCount: dto.memberCount,
+      createdAt: new Date(dto.createdAt),
+      expiresAt: new Date(dto.expiresAt),
+      canInvite: dto.canInvite,
+    }));
   } catch (error) {
     console.error('Failed to fetch crowds:', error);
     throw error;
@@ -283,11 +243,8 @@ export const getMyCrowds = async (): Promise<Crowd[]> => {
  */
 export const joinCrowd = async (crowdId: string): Promise<void> => {
   try {
-    // Generate crowd-specific ID first
-    const crowdUserId = await getOrGenerateCrowdUserId(crowdId);
-    
-    // Join with crowd-specific ID
-    await api.crowds.join(crowdId, { userId: crowdUserId });
+    const userId = await getOrGenerateUserId();
+    await api.crowds.join(crowdId, { userId });
   } catch (error) {
     console.error('Failed to join crowd:', error);
     throw error;
@@ -329,16 +286,12 @@ export const lookupCrowdToken = async (token: string): Promise<JoinedCrowdSummar
 };
 
 /**
- * Join a crowd by consuming a proximity token. The crowd id is required so
- * we can mint a crowd-specific user id — proximity-token QR payloads always
- * include `cid=<crowdId>`. A missing crowd id is a parse error upstream, not
- * a fallback.
+ * Join a crowd by consuming a proximity token.
  */
 export const joinCrowdWithToken = async (
   token: string,
-  crowdId: string,
 ): Promise<JoinedCrowdSummary> => {
-  const userId = await getOrGenerateCrowdUserId(crowdId);
+  const userId = await getOrGenerateUserId();
   const response = await api.crowds.joinWithToken({ token, userId });
   return {
     id: response.crowd.id,
@@ -354,11 +307,11 @@ export const joinCrowdWithToken = async (
  */
 export const leaveCrowd = async (crowdId: string): Promise<void> => {
   try {
-    // Get crowd-specific ID for leaving
-    const crowdUserId = await getOrGenerateCrowdUserId(crowdId);
-    await api.crowds.leave(crowdId, { userId: crowdUserId });
-    
-    // Delete crowd-specific ID after successful leave
+    const userId = await getOrGenerateUserId();
+    await api.crowds.leave(crowdId, { userId });
+
+    // Drop any locally-stored crowd-specific messaging ID for this crowd so
+    // a future re-join starts fresh and past message authorship stays unlinked.
     await deleteCrowdUserId(crowdId);
   } catch (error) {
     console.error('Failed to leave crowd:', error);

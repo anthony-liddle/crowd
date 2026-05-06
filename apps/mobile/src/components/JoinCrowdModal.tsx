@@ -92,7 +92,7 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
     if (!pendingTokenInvite) return;
     setJoining(true);
     try {
-      const summary = await joinCrowdWithToken(pendingTokenInvite.token, pendingTokenInvite.crowdId);
+      const summary = await joinCrowdWithToken(pendingTokenInvite.token);
       Toast.show({ type: 'success', text1: 'Joined', text2: `You have joined "${summary.name}".` });
       reset();
       onJoined();
