@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useColorScheme } from 'nativewind';
 import Toast from 'react-native-toast-message';
 import { joinCrowd, joinCrowdWithToken, lookupCrowdToken } from '@/services/api';
@@ -171,15 +179,19 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
         animationType="slide"
         onRequestClose={onClose}
       >
-        <Pressable
-          className="flex-1 justify-end"
-          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
-          onPress={onClose}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
         >
           <Pressable
-            onPress={(e) => e.stopPropagation()}
-            className="bg-paper dark:bg-paper-d rounded-t-[20px] px-screen-x pt-5 pb-7"
+            className="flex-1 justify-end"
+            style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+            onPress={onClose}
           >
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              className="bg-paper dark:bg-paper-d rounded-t-[20px] px-screen-x pt-5 pb-7"
+            >
             <View className="self-center w-9 h-1 bg-rule dark:bg-rule-d rounded-full mb-4" />
             <Text
               className="font-serif text-title text-ink dark:text-ink-d"
@@ -196,10 +208,9 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
               style={{
                 paddingHorizontal: 12,
                 paddingVertical: 10,
-                marginBottom: 20,
                 fontSize: 15,
               }}
-              placeholder="Paste invite code or link"
+              placeholder="Paste link or code"
               placeholderTextColor={c.dust2}
               selectionColor={c.ember}
               value={joinCode}
@@ -207,6 +218,12 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
               autoCapitalize="none"
               autoCorrect={false}
             />
+            <Text
+              className="font-sans text-dust dark:text-dust-d"
+              style={{ fontSize: 11, marginTop: 6, marginBottom: 20 }}
+            >
+              Either the full link or just the code at the end works.
+            </Text>
 
             <Separator label="Or join in person" rule={c.rule} />
 
@@ -239,8 +256,9 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
                 />
               </View>
             </View>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       <ScanQrScreen

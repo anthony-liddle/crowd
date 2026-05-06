@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   Switch,
   Text,
@@ -63,15 +65,19 @@ export const CreateCrowdModal: React.FC<CreateCrowdModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable
-        className="flex-1 justify-end"
-        style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
-        onPress={onClose}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
         <Pressable
-          onPress={(e) => e.stopPropagation()}
-          className="bg-paper dark:bg-paper-d rounded-t-[20px] px-screen-x pt-5 pb-7"
+          className="flex-1 justify-end"
+          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+          onPress={onClose}
         >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            className="bg-paper dark:bg-paper-d rounded-t-[20px] px-screen-x pt-5 pb-7"
+          >
           <View className="self-center w-9 h-1 bg-rule dark:bg-rule-d rounded-full mb-4" />
           <Text
             className="font-serif text-title text-ink dark:text-ink-d"
@@ -147,8 +153,9 @@ export const CreateCrowdModal: React.FC<CreateCrowdModalProps> = ({
               />
             </View>
           </View>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
