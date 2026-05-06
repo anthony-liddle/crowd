@@ -29,6 +29,13 @@
       "when": 1777843854738,
       "tag": "0003_reconcile_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778039461196,
+      "tag": "0004_proximity_tokens",
+      "breakpoints": true
     }
   ]
 }

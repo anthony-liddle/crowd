@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { setupTestDb, teardownTestDb, clearTables, getConnectionString } from '../helpers/testDb';
 import { createTestApp } from '../helpers/createApp';
 import { validCrowd, randomUuid } from '../helpers/fixtures';
+import { Pool } from 'pg';
 
 describe('Crowds API', () => {
   let app: FastifyInstance;
@@ -385,6 +386,151 @@ describe('Crowds API', () => {
       expect(leaveResponse.json().status).toBe('ok');
     });
 
+  });
+
+  describe('Proximity tokens', () => {
+    const mintToken = async (ownerId: string, isOpen = false) => {
+      const create = await app.inject({
+        method: 'POST',
+        url: '/crowds',
+        payload: validCrowd({ userId: ownerId, isOpen }),
+      });
+      const crowdId = create.json().id;
+      const tokenRes = await app.inject({
+        method: 'POST',
+        url: `/crowds/${crowdId}/proximity-token`,
+        payload: { userId: ownerId },
+      });
+      return { crowdId, response: tokenRes };
+    };
+
+    it('owner can mint a proximity token', async () => {
+      const ownerId = randomUuid();
+      const { response } = await mintToken(ownerId);
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(typeof body.token).toBe('string');
+      expect(body.token.length).toBeGreaterThanOrEqual(32);
+      expect(new Date(body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('non-owner cannot mint a proximity token', async () => {
+      const ownerId = randomUuid();
+      const intruderId = randomUuid();
+      const create = await app.inject({
+        method: 'POST',
+        url: '/crowds',
+        payload: validCrowd({ userId: ownerId }),
+      });
+      const crowdId = create.json().id;
+      const res = await app.inject({
+        method: 'POST',
+        url: `/crowds/${crowdId}/proximity-token`,
+        payload: { userId: intruderId },
+      });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('lookup returns crowd metadata without consuming the token', async () => {
+      const ownerId = randomUuid();
+      const { response } = await mintToken(ownerId, false);
+      const { token } = response.json();
+
+      const first = await app.inject({
+        method: 'POST',
+        url: '/crowds/lookup-token',
+        payload: { token },
+      });
+      expect(first.statusCode).toBe(200);
+      expect(first.json().crowd.isOpen).toBe(false);
+
+      // Lookup is idempotent — token still usable.
+      const second = await app.inject({
+        method: 'POST',
+        url: '/crowds/lookup-token',
+        payload: { token },
+      });
+      expect(second.statusCode).toBe(200);
+    });
+
+    it('join-with-token consumes a valid token (single-use)', async () => {
+      const ownerId = randomUuid();
+      const joinerId = randomUuid();
+      const { crowdId, response } = await mintToken(ownerId);
+      const { token } = response.json();
+
+      const joinRes = await app.inject({
+        method: 'POST',
+        url: '/crowds/join-with-token',
+        payload: { token, userId: joinerId },
+      });
+      expect(joinRes.statusCode).toBe(200);
+      expect(joinRes.json().crowd.id).toBe(crowdId);
+
+      // Reusing the token must fail.
+      const replay = await app.inject({
+        method: 'POST',
+        url: '/crowds/join-with-token',
+        payload: { token, userId: randomUuid() },
+      });
+      expect(replay.statusCode).toBe(400);
+      expect(replay.json().error).toMatch(/used/i);
+    });
+
+    it('rejects an expired token', async () => {
+      const ownerId = randomUuid();
+      const { response } = await mintToken(ownerId);
+      const { token } = response.json();
+
+      // Reach into the test DB to backdate the token's expiry — emulating
+      // the 5-minute TTL elapsing without sleeping the suite.
+      const pool = new Pool({ connectionString: getConnectionString()! });
+      try {
+        await pool.query(
+          `UPDATE proximity_tokens SET expires_at = NOW() - INTERVAL '1 minute' WHERE token = $1`,
+          [token],
+        );
+      } finally {
+        await pool.end();
+      }
+
+      const lookup = await app.inject({
+        method: 'POST',
+        url: '/crowds/lookup-token',
+        payload: { token },
+      });
+      expect(lookup.statusCode).toBe(400);
+      expect(lookup.json().error).toMatch(/expired/i);
+
+      const join = await app.inject({
+        method: 'POST',
+        url: '/crowds/join-with-token',
+        payload: { token, userId: randomUuid() },
+      });
+      expect(join.statusCode).toBe(400);
+    });
+
+    it('rejects an unknown token', async () => {
+      const join = await app.inject({
+        method: 'POST',
+        url: '/crowds/join-with-token',
+        payload: { token: 'a'.repeat(43), userId: randomUuid() },
+      });
+      expect(join.statusCode).toBe(404);
+      expect(join.json().error).toMatch(/invalid/i);
+    });
+
+    it('rejects malformed token payloads at the schema layer', async () => {
+      const join = await app.inject({
+        method: 'POST',
+        url: '/crowds/join-with-token',
+        payload: { token: 'short', userId: randomUuid() },
+      });
+      expect(join.statusCode).toBe(500); // ZodError surfaced as 500 by current handler
+    });
+  });
+
+  describe('POST /crowds/:id/leave (cont.)', () => {
     it('should decrement memberCount after leave', async () => {
       const ownerId = randomUuid();
       const memberId = randomUuid();

@@ -2,8 +2,13 @@ import React, { useState } from 'react';
 import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { useColorScheme } from 'nativewind';
 import Toast from 'react-native-toast-message';
-import { joinCrowd } from '@/services/api';
+import { joinCrowd, joinCrowdWithToken, lookupCrowdToken } from '@/services/api';
 import { PrimaryButton, QuietButton } from './Buttons';
+import { ScanQrScreen } from './ScanQrScreen';
+import { TapNfcModal } from './TapNfcModal';
+import { JoinCrowdConfirmation, ConfirmationCrowd } from './JoinCrowdConfirmation';
+import { parseCrowdInvite, CrowdInvite } from '@/utils/crowdInvite';
+import { QrIcon, NfcIcon } from './icons';
 
 interface JoinCrowdModalProps {
   visible: boolean;
@@ -12,8 +17,8 @@ interface JoinCrowdModalProps {
 }
 
 const COLORS = {
-  light: { ember: '#B85A2C', dust2: '#A09B91' },
-  dark: { ember: '#D08454', dust2: '#5A554B' },
+  light: { ember: '#B85A2C', dust2: '#A09B91', rule: '#E0DAC9' },
+  dark: { ember: '#D08454', dust2: '#5A554B', rule: '#2A2724' },
 };
 
 export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
@@ -27,136 +32,262 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
 
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
+  const [scanVisible, setScanVisible] = useState(false);
+  const [nfcVisible, setNfcVisible] = useState(false);
+  const [confirmation, setConfirmation] = useState<ConfirmationCrowd | null>(null);
+  // Pending invite — populated when a token lookup succeeded but the user
+  // hasn't confirmed yet. Cleared on Cancel or after a successful consume.
+  const [pendingTokenInvite, setPendingTokenInvite] = useState<
+    Extract<CrowdInvite, { kind: 'token' }> | null
+  >(null);
 
-  const handleJoin = async () => {
-    if (!joinCode.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Please enter an invite code',
+  const trimmed = joinCode.trim();
+  const joinDisabled = joining || trimmed.length === 0;
+
+  const reset = () => {
+    setJoinCode('');
+    setJoining(false);
+    setPendingTokenInvite(null);
+    setConfirmation(null);
+  };
+
+  const showTokenError = (error: any) => {
+    const tokenErr = error?.message?.includes('expired')
+      || error?.message?.includes('used')
+      || error?.message?.includes('Token')
+      || error?.message?.includes('Invalid token');
+    Toast.show({
+      type: 'error',
+      text1: tokenErr ? 'Code unavailable' : 'Failed to join',
+      text2: tokenErr
+        ? 'That code has expired or already been used. Ask the owner for a new one.'
+        : 'Failed to join crowd.',
+    });
+  };
+
+  const startTokenLookup = async (invite: Extract<CrowdInvite, { kind: 'token' }>) => {
+    try {
+      const summary = await lookupCrowdToken(invite.token);
+      setPendingTokenInvite(invite);
+      setConfirmation({
+        name: summary.name,
+        isOpen: summary.isOpen,
+        memberCount: summary.memberCount,
+        expiresAt: summary.expiresAt,
       });
-      return;
+    } catch (error: any) {
+      showTokenError(error);
     }
+  };
 
-    let crowdId = joinCode.trim();
-    if (crowdId.includes('crowd://join/')) {
-      crowdId = crowdId.replace('crowd://join/', '');
+  const consumePendingToken = async () => {
+    if (!pendingTokenInvite) return;
+    setJoining(true);
+    try {
+      const summary = await joinCrowdWithToken(pendingTokenInvite.token, pendingTokenInvite.crowdId);
+      Toast.show({ type: 'success', text1: 'Joined', text2: `You have joined "${summary.name}".` });
+      reset();
+      onJoined();
+      onClose();
+    } catch (error: any) {
+      showTokenError(error);
+      setJoining(false);
+    }
+  };
+
+  const handleJoinByCode = async () => {
+    if (!trimmed) return;
+    const invite = parseCrowdInvite(trimmed);
+
+    if (invite?.kind === 'token') {
+      // Tokens always preview before consuming.
+      await startTokenLookup(invite);
+      return;
     }
 
     setJoining(true);
     try {
+      const crowdId = invite?.kind === 'open' ? invite.crowdId : trimmed;
       await joinCrowd(crowdId);
-      Toast.show({
-        type: 'success',
-        text1: 'Joined',
-        text2: 'You have joined the crowd.',
-      });
-      setJoinCode('');
+      Toast.show({ type: 'success', text1: 'Joined', text2: 'You have joined the crowd.' });
+      reset();
       onJoined();
       onClose();
     } catch (error: any) {
-      const message = error.message?.includes('closed')
-        ? 'This crowd is closed to new members'
-        : error.message?.includes('Already')
-          ? 'You are already a member'
+      const message = error?.message?.includes('closed')
+        ? 'This crowd is private — ask the owner for a QR or NFC code.'
+        : error?.message?.includes('Already')
+          ? 'You are already a member.'
           : 'Failed to join crowd';
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: message,
-      });
+      Toast.show({ type: 'error', text1: 'Error', text2: message });
     } finally {
       setJoining(false);
     }
   };
 
+  const handleScanResult = (raw: string) => {
+    setScanVisible(false);
+    const invite = parseCrowdInvite(raw);
+    if (!invite) {
+      Toast.show({
+        type: 'error',
+        text1: 'Not a Crowd code',
+        text2: "That doesn't look like a Crowd code.",
+      });
+      return;
+    }
+    if (invite.kind === 'token') {
+      startTokenLookup(invite);
+    } else {
+      // Open-crowd QR — no preview needed; same code path as paste.
+      (async () => {
+        setJoining(true);
+        try {
+          await joinCrowd(invite.crowdId);
+          Toast.show({ type: 'success', text1: 'Joined', text2: 'You have joined the crowd.' });
+          reset();
+          onJoined();
+          onClose();
+        } catch (error: any) {
+          Toast.show({
+            type: 'error',
+            text1: 'Error',
+            text2: error?.message?.includes('Already')
+              ? 'You are already a member.'
+              : 'Failed to join crowd.',
+          });
+        } finally {
+          setJoining(false);
+        }
+      })();
+    }
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable
-        className="flex-1 justify-end"
-        style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
-        onPress={onClose}
+    <>
+      <Modal
+        visible={visible && !scanVisible && !nfcVisible && !confirmation}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
       >
         <Pressable
-          onPress={(e) => e.stopPropagation()}
-          className="bg-paper dark:bg-paper-d rounded-t-[20px] px-screen-x pt-5 pb-7"
+          className="flex-1 justify-end"
+          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+          onPress={onClose}
         >
-          <View className="self-center w-9 h-1 bg-rule dark:bg-rule-d rounded-full mb-4" />
-          <Text
-            className="font-serif text-ink dark:text-ink-d mb-3"
-            style={{ fontSize: 18 }}
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            className="bg-paper dark:bg-paper-d rounded-t-[20px] px-screen-x pt-5 pb-7"
           >
-            Join a crowd
-          </Text>
+            <View className="self-center w-9 h-1 bg-rule dark:bg-rule-d rounded-full mb-4" />
+            <Text
+              className="font-serif text-title text-ink dark:text-ink-d"
+              style={{ marginBottom: 16 }}
+            >
+              Join a crowd
+            </Text>
 
-          <Text className="font-sans text-meta text-dust dark:text-dust-d mb-2">
-            Invite code
-          </Text>
-          <TextInput
-            className="bg-paper-2 dark:bg-paper-2-d border border-rule dark:border-rule-d rounded-md font-sans text-ink dark:text-ink-d"
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              marginBottom: 12,
-              fontSize: 15,
-            }}
-            placeholder="Paste invite code or link"
-            placeholderTextColor={c.dust2}
-            selectionColor={c.ember}
-            value={joinCode}
-            onChangeText={setJoinCode}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+            <Text className="font-sans text-meta text-dust dark:text-dust-d mb-2">
+              Invite code
+            </Text>
+            <TextInput
+              className="bg-paper-2 dark:bg-paper-2-d border border-rule dark:border-rule-d rounded-md font-sans text-ink dark:text-ink-d"
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                marginBottom: 20,
+                fontSize: 15,
+              }}
+              placeholder="Paste invite code or link"
+              placeholderTextColor={c.dust2}
+              selectionColor={c.ember}
+              value={joinCode}
+              onChangeText={setJoinCode}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
-          <Text
-            className="font-sans text-meta text-dust dark:text-dust-d"
-            style={{ marginBottom: 12, textAlign: 'center' }}
-          >
-            Or use a QR code or NFC tap to join instantly.
-          </Text>
+            <Separator label="Or join in person" rule={c.rule} />
 
-          <View className="flex-row" style={{ gap: 10, marginBottom: 16 }}>
-            <View className="flex-1">
-              <QuietButton
-                label="Scan QR"
-                onPress={() =>
-                  Toast.show({
-                    type: 'info',
-                    text1: 'Coming soon',
-                    text2: 'QR scanning is on the roadmap.',
-                  })
-                }
-              />
+            <View className="flex-row" style={{ gap: 10, marginTop: 16, marginBottom: 24 }}>
+              <View className="flex-1">
+                <IconQuietButton
+                  label="Scan QR"
+                  icon={<QrIcon size={16} color={c.ember} />}
+                  onPress={() => setScanVisible(true)}
+                />
+              </View>
+              <View className="flex-1">
+                <IconQuietButton
+                  label="Tap NFC"
+                  icon={<NfcIcon size={16} color={c.ember} />}
+                  onPress={() => setNfcVisible(true)}
+                />
+              </View>
             </View>
-            <View className="flex-1">
-              <QuietButton
-                label="Tap NFC"
-                onPress={() =>
-                  Toast.show({
-                    type: 'info',
-                    text1: 'Coming soon',
-                    text2: 'NFC join is on the roadmap.',
-                  })
-                }
-              />
-            </View>
-          </View>
 
-          <View className="flex-row" style={{ gap: 10 }}>
-            <View className="flex-1">
-              <QuietButton label="Cancel" onPress={onClose} />
+            <View className="flex-row" style={{ gap: 10 }}>
+              <View className="flex-1">
+                <QuietButton label="Cancel" onPress={onClose} />
+              </View>
+              <View className="flex-1" style={{ opacity: joinDisabled ? 0.5 : 1 }}>
+                <PrimaryButton
+                  label={joining ? 'Joining…' : 'Join'}
+                  onPress={handleJoinByCode}
+                  disabled={joinDisabled}
+                />
+              </View>
             </View>
-            <View className="flex-1" style={{ opacity: joining ? 0.5 : 1 }}>
-              <PrimaryButton
-                label={joining ? 'Joining…' : 'Join'}
-                onPress={handleJoin}
-                disabled={joining}
-              />
-            </View>
-          </View>
+          </Pressable>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </Modal>
+
+      <ScanQrScreen
+        visible={scanVisible}
+        onCancel={() => setScanVisible(false)}
+        onScan={handleScanResult}
+      />
+
+      <TapNfcModal visible={nfcVisible} onClose={() => setNfcVisible(false)} />
+
+      <JoinCrowdConfirmation
+        crowd={confirmation}
+        joining={joining}
+        onConfirm={consumePendingToken}
+        onCancel={() => {
+          setConfirmation(null);
+          setPendingTokenInvite(null);
+        }}
+      />
+    </>
   );
 };
+
+const Separator: React.FC<{ label: string; rule: string }> = ({ label, rule }) => (
+  <View className="flex-row items-center" style={{ gap: 10 }}>
+    <View style={{ flex: 1, height: 1, backgroundColor: rule }} />
+    <Text
+      className="font-serif-italic text-dust dark:text-dust-d"
+      style={{ fontSize: 12 }}
+    >
+      {label}
+    </Text>
+    <View style={{ flex: 1, height: 1, backgroundColor: rule }} />
+  </View>
+);
+
+const IconQuietButton: React.FC<{ label: string; icon: React.ReactNode; onPress: () => void }> = ({
+  label,
+  icon,
+  onPress,
+}) => (
+  <Pressable
+    onPress={onPress}
+    className="flex-row items-center justify-center border border-rule dark:border-rule-d rounded-md active:opacity-60"
+    style={{ paddingVertical: 12, gap: 8 }}
+  >
+    {icon}
+    <Text className="text-ink dark:text-ink-d font-sans text-body">{label}</Text>
+  </Pressable>
+);

@@ -38,11 +38,7 @@ export const CreateCrowdModal: React.FC<CreateCrowdModalProps> = ({
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Please enter a crowd name',
-      });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter a crowd name' });
       return;
     }
 
@@ -58,12 +54,8 @@ export const CreateCrowdModal: React.FC<CreateCrowdModalProps> = ({
       setIsOpen(true);
       onCreated();
       onClose();
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to create crowd',
-      });
+    } catch {
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to create crowd' });
     } finally {
       setCreating(false);
     }
@@ -82,10 +74,17 @@ export const CreateCrowdModal: React.FC<CreateCrowdModalProps> = ({
         >
           <View className="self-center w-9 h-1 bg-rule dark:bg-rule-d rounded-full mb-4" />
           <Text
-            className="font-serif text-ink dark:text-ink-d mb-3"
-            style={{ fontSize: 18 }}
+            className="font-serif text-title text-ink dark:text-ink-d"
+            style={{ marginBottom: 8 }}
           >
             Start a crowd
+          </Text>
+          <Text
+            className="font-sans text-body text-dust dark:text-dust-d"
+            style={{ marginBottom: 24 }}
+          >
+            A crowd is a small trusted group. Members can post and read in your
+            shared space until it expires.
           </Text>
 
           <Text className="font-sans text-meta text-dust dark:text-dust-d mb-2">
@@ -96,7 +95,7 @@ export const CreateCrowdModal: React.FC<CreateCrowdModalProps> = ({
             style={{
               paddingHorizontal: 12,
               paddingVertical: 10,
-              marginBottom: 16,
+              marginBottom: 20,
               fontSize: 15,
             }}
             placeholder="Name your crowd"
@@ -108,21 +107,23 @@ export const CreateCrowdModal: React.FC<CreateCrowdModalProps> = ({
           />
 
           <View
-            className="flex-row items-center justify-between"
-            style={{ marginBottom: 24 }}
+            className="flex-row items-start justify-between"
+            style={{ marginBottom: 28 }}
           >
             <View className="flex-1 pr-4">
               <Text
                 className="font-sans-medium text-ink dark:text-ink-d"
-                style={{ fontSize: 13 }}
+                style={{ fontSize: 14 }}
               >
                 Open crowd
               </Text>
               <Text
                 className="font-sans text-dust dark:text-dust-d"
-                style={{ fontSize: 12, marginTop: 2 }}
+                style={{ fontSize: 12, marginTop: 2, lineHeight: 17 }}
               >
-                {isOpen ? 'Anyone with the code can join' : 'Only you can add members'}
+                {isOpen
+                  ? 'Anyone with the code can join.'
+                  : 'People can only join in person, with QR or NFC.'}
               </Text>
             </View>
             <Switch

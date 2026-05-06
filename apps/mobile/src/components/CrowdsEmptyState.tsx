@@ -1,17 +1,8 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { Concentric } from './Concentric';
-import { PrimaryButton, QuietButton } from './Buttons';
 
-interface CrowdsEmptyStateProps {
-  onCreatePress: () => void;
-  onJoinPress: () => void;
-}
-
-export const CrowdsEmptyState: React.FC<CrowdsEmptyStateProps> = ({
-  onCreatePress,
-  onJoinPress,
-}) => (
+export const CrowdsEmptyState: React.FC = () => (
   <View
     className="flex-1 items-center justify-center px-screen-x"
     style={{ paddingVertical: 48 }}
@@ -27,12 +18,8 @@ export const CrowdsEmptyState: React.FC<CrowdsEmptyStateProps> = ({
       className="font-sans text-body text-dust dark:text-dust-d"
       style={{ marginTop: 8, textAlign: 'center', maxWidth: 280 }}
     >
-      A crowd is a small trusted group. Open crowds join by code; private
-      crowds need physical proximity.
+      A crowd is a small trusted group. Members can post and read in your shared
+      space until it expires.
     </Text>
-    <View style={{ marginTop: 24, width: '100%', maxWidth: 280, gap: 10 }}>
-      <PrimaryButton label="Start a crowd" onPress={onCreatePress} />
-      <QuietButton label="Join with a code" onPress={onJoinPress} />
-    </View>
   </View>
 );

@@ -80,6 +80,48 @@ export const RotateMembershipSchema = z.object({
   newUserId: z.string().uuid(),
 });
 
+// Proximity-token schemas. Owner generates a short-lived single-use token
+// that is encoded into a QR/NFC payload; any user can present that token
+// to /crowds/join-with-token to join the crowd, including private ones.
+export const CreateProximityTokenSchema = z.object({
+  userId: z.string().uuid(),
+});
+
+export const JoinWithTokenSchema = z.object({
+  token: z.string().min(16).max(128),
+  userId: z.string().uuid(),
+});
+
+export const LookupTokenSchema = z.object({
+  token: z.string().min(16).max(128),
+});
+
+export const LookupTokenResponseSchema = z.object({
+  crowd: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    isOpen: z.boolean(),
+    memberCount: z.number().int(),
+    expiresAt: z.coerce.date(),
+  }),
+});
+
+export const ProximityTokenResponseSchema = z.object({
+  token: z.string(),
+  expiresAt: z.coerce.date(),
+});
+
+export const JoinWithTokenResponseSchema = z.object({
+  status: z.string(),
+  crowd: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    isOpen: z.boolean(),
+    memberCount: z.number().int(),
+    expiresAt: z.coerce.date(),
+  }),
+});
+
 // Response Schemas (for API client validation)
 // These handle JSON date strings being coerced to Date objects
 export const MessageResponseSchema = z.object({
@@ -133,3 +175,9 @@ export type MessageResponse = z.infer<typeof MessageResponseSchema>;
 export type CrowdResponse = z.infer<typeof CrowdResponseSchema>;
 export type IdResponse = z.infer<typeof IdResponseSchema>;
 export type StatusResponse = z.infer<typeof StatusResponseSchema>;
+export type CreateProximityTokenDto = z.infer<typeof CreateProximityTokenSchema>;
+export type JoinWithTokenDto = z.infer<typeof JoinWithTokenSchema>;
+export type LookupTokenDto = z.infer<typeof LookupTokenSchema>;
+export type ProximityTokenResponse = z.infer<typeof ProximityTokenResponseSchema>;
+export type JoinWithTokenResponse = z.infer<typeof JoinWithTokenResponseSchema>;
+export type LookupTokenResponse = z.infer<typeof LookupTokenResponseSchema>;
