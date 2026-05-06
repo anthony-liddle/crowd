@@ -1,5 +1,6 @@
 import fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import { randomBytes } from 'crypto';
 import {
   PostMessageSchema,
   QueryFeedSchema,
@@ -8,13 +9,17 @@ import {
   JoinCrowdSchema,
   LeaveCrowdSchema,
   QueryCrowdsSchema,
+  CreateProximityTokenSchema,
+  JoinWithTokenSchema,
+  LookupTokenSchema,
 } from '@repo/shared';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import { messages, messageBoosts, crowds, crowdMemberships } from '../../src/db/schema';
+import { messages, messageBoosts, crowds, crowdMemberships, proximityTokens } from '../../src/db/schema';
 import { sql, asc, gt, and, eq, count, isNull } from 'drizzle-orm';
 
 const CROWD_DURATION_MS = 24 * 60 * 60 * 1000;
+const PROXIMITY_TOKEN_TTL_MS = 5 * 60 * 1000;
 
 export function createTestApp(connectionString: string): FastifyInstance {
   const pool = new Pool({ connectionString });
@@ -136,6 +141,132 @@ export function createTestApp(connectionString: string): FastifyInstance {
       }
 
       return { status: 'ok' };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      return reply.status(500).send({ error: 'Internal Server Error', message });
+    }
+  });
+
+  server.post('/crowds/:id/proximity-token', async (request, reply) => {
+    try {
+      const crowdId = (request.params as { id: string }).id;
+      const body = CreateProximityTokenSchema.parse(request.body);
+
+      const [crowd] = await db.select().from(crowds).where(eq(crowds.id, crowdId));
+      if (!crowd) return reply.status(404).send({ error: 'Crowd not found' });
+      if (crowd.expiresAt < new Date()) {
+        return reply.status(400).send({ error: 'Crowd expired' });
+      }
+      if (crowd.ownerId !== body.userId) {
+        return reply.status(403).send({ error: 'Only the owner can generate join codes' });
+      }
+
+      const token = randomBytes(32).toString('base64url');
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + PROXIMITY_TOKEN_TTL_MS);
+
+      await db.insert(proximityTokens).values({
+        crowdId,
+        token,
+        createdAt: now,
+        expiresAt,
+      });
+
+      return { token, expiresAt };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      return reply.status(500).send({ error: 'Internal Server Error', message });
+    }
+  });
+
+  server.post('/crowds/lookup-token', async (request, reply) => {
+    try {
+      const body = LookupTokenSchema.parse(request.body);
+
+      const [tokenRow] = await db.select().from(proximityTokens).where(eq(proximityTokens.token, body.token));
+      if (!tokenRow) return reply.status(404).send({ error: 'Invalid token' });
+      if (tokenRow.usedAt !== null) {
+        return reply.status(400).send({ error: 'Token already used' });
+      }
+      if (tokenRow.expiresAt < new Date()) {
+        return reply.status(400).send({ error: 'Token expired' });
+      }
+
+      const [crowd] = await db.select().from(crowds).where(eq(crowds.id, tokenRow.crowdId));
+      if (!crowd) return reply.status(404).send({ error: 'Crowd not found' });
+      if (crowd.expiresAt < new Date()) {
+        return reply.status(400).send({ error: 'Crowd expired' });
+      }
+
+      const [memberCountResult] = await db
+        .select({ count: count() })
+        .from(crowdMemberships)
+        .where(eq(crowdMemberships.crowdId, tokenRow.crowdId));
+
+      return {
+        crowd: {
+          id: crowd.id,
+          name: crowd.name,
+          isOpen: crowd.isOpen,
+          memberCount: memberCountResult?.count || 0,
+          expiresAt: crowd.expiresAt,
+        },
+      };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      return reply.status(500).send({ error: 'Internal Server Error', message });
+    }
+  });
+
+  server.post('/crowds/join-with-token', async (request, reply) => {
+    try {
+      const body = JoinWithTokenSchema.parse(request.body);
+
+      const [tokenRow] = await db.select().from(proximityTokens).where(eq(proximityTokens.token, body.token));
+      if (!tokenRow) return reply.status(404).send({ error: 'Invalid token' });
+      if (tokenRow.usedAt !== null) {
+        return reply.status(400).send({ error: 'Token already used' });
+      }
+      if (tokenRow.expiresAt < new Date()) {
+        return reply.status(400).send({ error: 'Token expired' });
+      }
+
+      const [crowd] = await db.select().from(crowds).where(eq(crowds.id, tokenRow.crowdId));
+      if (!crowd) return reply.status(404).send({ error: 'Crowd not found' });
+      if (crowd.expiresAt < new Date()) {
+        return reply.status(400).send({ error: 'Crowd expired' });
+      }
+
+      const [existing] = await db.select().from(crowdMemberships).where(and(
+        eq(crowdMemberships.crowdId, tokenRow.crowdId),
+        eq(crowdMemberships.userId, body.userId),
+      ));
+      if (!existing) {
+        await db.insert(crowdMemberships).values({
+          crowdId: tokenRow.crowdId,
+          userId: body.userId,
+        });
+      }
+
+      await db.update(proximityTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(proximityTokens.id, tokenRow.id));
+
+      const [memberCountResult] = await db
+        .select({ count: count() })
+        .from(crowdMemberships)
+        .where(eq(crowdMemberships.crowdId, tokenRow.crowdId));
+
+      return {
+        status: 'ok',
+        crowd: {
+          id: crowd.id,
+          name: crowd.name,
+          isOpen: crowd.isOpen,
+          memberCount: memberCountResult?.count || 0,
+          expiresAt: crowd.expiresAt,
+        },
+      };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });

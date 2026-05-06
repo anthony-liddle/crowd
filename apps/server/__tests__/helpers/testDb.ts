@@ -61,6 +61,18 @@ CREATE TABLE IF NOT EXISTS "message_boosts" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "unique_user_boost" ON "message_boosts" ("message_id", "user_id");
 CREATE INDEX IF NOT EXISTS "message_boosts_message_id_idx" ON "message_boosts" ("message_id");
+
+-- Create proximity_tokens table
+CREATE TABLE IF NOT EXISTS "proximity_tokens" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "crowd_id" uuid NOT NULL REFERENCES "crowds"("id") ON DELETE CASCADE,
+  "token" text NOT NULL,
+  "created_at" timestamp DEFAULT now() NOT NULL,
+  "expires_at" timestamp NOT NULL,
+  "used_at" timestamp
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_proximity_token" ON "proximity_tokens" ("token");
+CREATE INDEX IF NOT EXISTS "proximity_tokens_crowd_id_idx" ON "proximity_tokens" ("crowd_id");
 `;
 
 export async function setupTestDb() {
@@ -96,6 +108,7 @@ export async function clearTables() {
   // Clear tables in correct order due to foreign keys
   await pool.query('DELETE FROM message_boosts');
   await pool.query('DELETE FROM messages');
+  await pool.query('DELETE FROM proximity_tokens');
   await pool.query('DELETE FROM crowd_memberships');
   await pool.query('DELETE FROM crowds');
 }

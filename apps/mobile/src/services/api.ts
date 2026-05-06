@@ -295,6 +295,61 @@ export const joinCrowd = async (crowdId: string): Promise<void> => {
 };
 
 /**
+ * Generate a single-use proximity token for a crowd. Owner-only on the server.
+ */
+export const createProximityToken = async (
+  crowdId: string,
+): Promise<{ token: string; expiresAt: Date }> => {
+  const mainUserId = await getOrGenerateUserId();
+  const response = await api.crowds.proximityToken(crowdId, { userId: mainUserId });
+  return { token: response.token, expiresAt: new Date(response.expiresAt) };
+};
+
+interface JoinedCrowdSummary {
+  id: string;
+  name: string;
+  isOpen: boolean;
+  memberCount: number;
+  expiresAt: Date;
+}
+
+/**
+ * Look up a proximity token without consuming it. Returns the crowd metadata
+ * so the UI can show a pre-join confirmation. Throws on invalid/expired tokens.
+ */
+export const lookupCrowdToken = async (token: string): Promise<JoinedCrowdSummary> => {
+  const response = await api.crowds.lookupToken({ token });
+  return {
+    id: response.crowd.id,
+    name: response.crowd.name,
+    isOpen: response.crowd.isOpen,
+    memberCount: response.crowd.memberCount,
+    expiresAt: new Date(response.crowd.expiresAt),
+  };
+};
+
+/**
+ * Join a crowd by consuming a proximity token. The crowd id is required so
+ * we can mint a crowd-specific user id — proximity-token QR payloads always
+ * include `cid=<crowdId>`. A missing crowd id is a parse error upstream, not
+ * a fallback.
+ */
+export const joinCrowdWithToken = async (
+  token: string,
+  crowdId: string,
+): Promise<JoinedCrowdSummary> => {
+  const userId = await getOrGenerateCrowdUserId(crowdId);
+  const response = await api.crowds.joinWithToken({ token, userId });
+  return {
+    id: response.crowd.id,
+    name: response.crowd.name,
+    isOpen: response.crowd.isOpen,
+    memberCount: response.crowd.memberCount,
+    expiresAt: new Date(response.crowd.expiresAt),
+  };
+};
+
+/**
  * Leave a crowd
  */
 export const leaveCrowd = async (crowdId: string): Promise<void> => {

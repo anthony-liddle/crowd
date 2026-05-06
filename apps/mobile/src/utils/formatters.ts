@@ -84,6 +84,24 @@ export const formatTimeRemaining = (expiresAt: Date): string => {
 };
 
 /**
+ * Crowd-card urgency tiers.
+ *   normal  — > 2h remaining; meta text in dust
+ *   soon    — ≤ 2h, > 30m; meta text in ember, "Expiring soon" tag, ember card border
+ *   acute   — ≤ 30m; meta text in ember-warn (acute)
+ */
+export type CrowdUrgency = 'normal' | 'soon' | 'acute';
+
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+const THIRTY_MIN_MS = 30 * 60 * 1000;
+
+export const getCrowdUrgency = (expiresAt: Date, now: number = Date.now()): CrowdUrgency => {
+  const diff = expiresAt.getTime() - now;
+  if (diff <= THIRTY_MIN_MS) return 'acute';
+  if (diff <= TWO_HOURS_MS) return 'soon';
+  return 'normal';
+};
+
+/**
  * Compute the ring's two visual signals from a message and a reference time.
  * `fractionRemaining` (0..1) drives the arc length; `minutesRemaining` (absolute)
  * drives the color threshold.

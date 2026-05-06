@@ -5,10 +5,16 @@ import type {
   CreateCrowdDto,
   JoinCrowdDto,
   LeaveCrowdDto,
+  CreateProximityTokenDto,
+  JoinWithTokenDto,
+  LookupTokenDto,
   MessageResponse,
   CrowdResponse,
   IdResponse,
   StatusResponse,
+  ProximityTokenResponse,
+  JoinWithTokenResponse,
+  LookupTokenResponse,
 } from '@repo/shared';
 import * as Shared from '@repo/shared';
 import { z } from 'zod';
@@ -124,6 +130,36 @@ class ApiClient {
     leave: async (crowdId: string, data: LeaveCrowdDto): Promise<StatusResponse> => {
       const parsed = Shared.LeaveCrowdSchema.parse(data);
       return this.request<StatusResponse>(`/crowds/${crowdId}/leave`, 'POST', parsed, 30000, Shared.StatusResponseSchema);
+    },
+    proximityToken: async (crowdId: string, data: CreateProximityTokenDto): Promise<ProximityTokenResponse> => {
+      const parsed = Shared.CreateProximityTokenSchema.parse(data);
+      return this.request<ProximityTokenResponse>(
+        `/crowds/${crowdId}/proximity-token`,
+        'POST',
+        parsed,
+        30000,
+        Shared.ProximityTokenResponseSchema,
+      );
+    },
+    joinWithToken: async (data: JoinWithTokenDto): Promise<JoinWithTokenResponse> => {
+      const parsed = Shared.JoinWithTokenSchema.parse(data);
+      return this.request<JoinWithTokenResponse>(
+        '/crowds/join-with-token',
+        'POST',
+        parsed,
+        30000,
+        Shared.JoinWithTokenResponseSchema,
+      );
+    },
+    lookupToken: async (data: LookupTokenDto): Promise<LookupTokenResponse> => {
+      const parsed = Shared.LookupTokenSchema.parse(data);
+      return this.request<LookupTokenResponse>(
+        '/crowds/lookup-token',
+        'POST',
+        parsed,
+        30000,
+        Shared.LookupTokenResponseSchema,
+      );
     },
   };
 

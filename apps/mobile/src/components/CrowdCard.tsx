@@ -1,9 +1,11 @@
 import React from 'react';
 import { Share, Text, View } from 'react-native';
+import { useColorScheme } from 'nativewind';
 import Toast from 'react-native-toast-message';
 import { Crowd } from '@/types';
-import { formatTimeRemaining } from '@/utils/formatters';
+import { formatTimeRemaining, getCrowdUrgency, CrowdUrgency } from '@/utils/formatters';
 import { QuietButton } from './Buttons';
+import { LockIcon, OpenLinesIcon } from './icons';
 
 interface CrowdCardProps {
   crowd: Crowd;
@@ -12,6 +14,13 @@ interface CrowdCardProps {
 }
 
 export const CrowdCard: React.FC<CrowdCardProps> = ({ crowd, onLeave }) => {
+  const urgency = getCrowdUrgency(crowd.expiresAt);
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const emberHex = isDark ? '#D08454' : '#B85A2C';
+  const dust2Hex = isDark ? '#5A554B' : '#A09B91';
+  const expiringBg = isDark ? 'rgba(208, 132, 84, 0.18)' : 'rgba(184, 90, 44, 0.12)';
+
   const handleShareInvite = async () => {
     const inviteLink = `crowd://join/${crowd.id}`;
     try {
@@ -19,17 +28,23 @@ export const CrowdCard: React.FC<CrowdCardProps> = ({ crowd, onLeave }) => {
         message: `Join my crowd "${crowd.name}"! Use this code: ${inviteLink}`,
       });
     } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to share invite',
-      });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to share invite' });
     }
   };
 
+  // Owned crowds carry a subtle background tint to set them apart from joined
+  // crowds at a glance. Expiring-soon crowds get an ember border that overrides
+  // the standard rule border.
+  const cardBg = crowd.isOwner
+    ? 'bg-paper-tint dark:bg-paper-tint-d'
+    : 'bg-paper-2 dark:bg-paper-2-d';
+  const cardBorder = urgency !== 'normal'
+    ? 'border border-ember dark:border-ember-d'
+    : 'border border-rule dark:border-rule-d';
+
   return (
     <View
-      className="bg-paper-2 dark:bg-paper-2-d border border-rule dark:border-rule-d rounded-md mx-screen-x mb-3"
+      className={`${cardBg} ${cardBorder} rounded-md mx-screen-x mb-3`}
       style={{ padding: 14 }}
     >
       <View
@@ -42,17 +57,32 @@ export const CrowdCard: React.FC<CrowdCardProps> = ({ crowd, onLeave }) => {
         >
           {crowd.name}
         </Text>
-        {crowd.isOwner && <Pill label="Owner" tone="ember" />}
-        <Pill label={crowd.isOpen ? 'Open' : 'Closed'} tone={crowd.isOpen ? 'ember' : 'dust'} />
+        {crowd.isOpen ? <OpenBadge emberHex={emberHex} /> : <PrivateBadge dust2Hex={dust2Hex} />}
+        {urgency !== 'normal' && <ExpiringSoonBadge bg={expiringBg} />}
       </View>
 
-      <View className="flex-row" style={{ gap: 16, marginBottom: 12 }}>
+      <View
+        className="flex-row items-center"
+        style={{ gap: 10, marginBottom: 12, flexWrap: 'wrap' }}
+      >
         <Text className="font-sans text-meta text-dust dark:text-dust-d">
-          {crowd.memberCount} members
+          {crowd.memberCount} {crowd.memberCount === 1 ? 'member' : 'members'}
         </Text>
-        <Text className="font-sans text-meta text-dust dark:text-dust-d">
+        <Text className="font-sans text-meta text-dust dark:text-dust-d">·</Text>
+        <Text className={timeClassName(urgency)} style={{ fontSize: 11, lineHeight: 14 }}>
           {formatTimeRemaining(crowd.expiresAt)}
         </Text>
+        {crowd.isOwner && (
+          <>
+            <Text className="font-sans text-meta text-dust-2 dark:text-dust-2-d">·</Text>
+            <Text
+              className="font-serif-italic text-dust-2 dark:text-dust-2-d"
+              style={{ fontSize: 11, lineHeight: 14 }}
+            >
+              Started by you
+            </Text>
+          </>
+        )}
       </View>
 
       <View className="flex-row" style={{ gap: 8 }}>
@@ -69,29 +99,56 @@ export const CrowdCard: React.FC<CrowdCardProps> = ({ crowd, onLeave }) => {
   );
 };
 
-interface PillProps {
-  label: string;
-  tone: 'ember' | 'dust';
-}
+const timeClassName = (urgency: CrowdUrgency): string => {
+  if (urgency === 'acute') return 'font-sans-medium text-ember-warn dark:text-ember-warn-d';
+  if (urgency === 'soon') return 'font-sans-medium text-ember dark:text-ember-d';
+  return 'font-sans text-dust dark:text-dust-d';
+};
 
-const Pill: React.FC<PillProps> = ({ label, tone }) => (
+const OpenBadge: React.FC<{ emberHex: string }> = ({ emberHex }) => (
   <View
-    className={
-      tone === 'ember'
-        ? 'border border-ember dark:border-ember-d rounded-sm'
-        : 'border border-rule dark:border-rule-d rounded-sm'
-    }
-    style={{ paddingHorizontal: 6, paddingVertical: 1 }}
+    className="flex-row items-center border border-ember dark:border-ember-d rounded-sm"
+    style={{ paddingHorizontal: 6, paddingVertical: 1, gap: 4 }}
   >
+    <OpenLinesIcon size={10} color={emberHex} />
     <Text
-      className={
-        tone === 'ember'
-          ? 'font-sans-medium text-ember dark:text-ember-d'
-          : 'font-sans text-dust dark:text-dust-d'
-      }
+      className="font-sans-medium text-ember dark:text-ember-d"
       style={{ fontSize: 10 }}
     >
-      {label}
+      Open
+    </Text>
+  </View>
+);
+
+const PrivateBadge: React.FC<{ dust2Hex: string }> = ({ dust2Hex }) => (
+  <View
+    className="flex-row items-center border border-dust-2 dark:border-dust-2-d rounded-sm"
+    style={{ paddingHorizontal: 6, paddingVertical: 1, gap: 4 }}
+  >
+    <LockIcon size={10} color={dust2Hex} />
+    <Text
+      className="font-sans-medium text-dust-2 dark:text-dust-2-d"
+      style={{ fontSize: 10 }}
+    >
+      Private
+    </Text>
+  </View>
+);
+
+const ExpiringSoonBadge: React.FC<{ bg: string }> = ({ bg }) => (
+  <View
+    style={{
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 6,
+      backgroundColor: bg,
+    }}
+  >
+    <Text
+      className="font-sans-medium text-ember dark:text-ember-d"
+      style={{ fontSize: 10 }}
+    >
+      Expiring soon
     </Text>
   </View>
 );
