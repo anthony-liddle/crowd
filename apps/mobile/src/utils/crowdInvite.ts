@@ -25,13 +25,16 @@ export function parseCrowdInvite(input: string): CrowdInvite | null {
     const [tokenPart, queryPart] = rest.split('?');
     if (!tokenPart || !queryPart) return null;
     const params = new URLSearchParams(queryPart);
-    const cid = params.get('cid');
+    const cid = params.get('cid')?.replace(/\/+$/, '');
     if (!cid || !UUID_RE.test(cid)) return null;
     return { kind: 'token', token: decodeURIComponent(tokenPart), crowdId: cid };
   }
 
   if (trimmed.startsWith('crowd://join/')) {
-    const id = trimmed.slice('crowd://join/'.length).split('?')[0];
+    const id = trimmed
+      .slice('crowd://join/'.length)
+      .split('?')[0]
+      .replace(/\/+$/, '');
     if (id && UUID_RE.test(id)) {
       return { kind: 'open', crowdId: id };
     }

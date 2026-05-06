@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Share, Text, View } from 'react-native';
 import { useColorScheme } from 'nativewind';
 import Toast from 'react-native-toast-message';
@@ -6,6 +6,7 @@ import { Crowd } from '@/types';
 import { formatTimeRemaining, getCrowdUrgency, CrowdUrgency } from '@/utils/formatters';
 import { QuietButton } from './Buttons';
 import { LockIcon, OpenLinesIcon } from './icons';
+import { PrivateInviteSheet } from './PrivateInviteSheet';
 
 interface CrowdCardProps {
   crowd: Crowd;
@@ -21,13 +22,23 @@ export const CrowdCard: React.FC<CrowdCardProps> = ({ crowd, onLeave }) => {
   const dust2Hex = isDark ? '#5A554B' : '#A09B91';
   const expiringBg = isDark ? 'rgba(208, 132, 84, 0.18)' : 'rgba(184, 90, 44, 0.12)';
 
-  const handleShareInvite = async () => {
+  const [privateInviteVisible, setPrivateInviteVisible] = useState(false);
+
+  // Open crowds use the iOS share sheet — the link is meant to travel
+  // anywhere. Private crowds open a QR-only modal because their privacy
+  // model requires physical proximity; a shareable link would defeat it.
+  const handleInvite = async () => {
+    if (!crowd.isOpen) {
+      setPrivateInviteVisible(true);
+      return;
+    }
     const inviteLink = `crowd://join/${crowd.id}`;
     try {
       await Share.share({
-        message: `Join my crowd "${crowd.name}"! Use this code: ${inviteLink}`,
+        message: `Join my crowd "${crowd.name}": ${inviteLink}`,
+        url: inviteLink,
       });
-    } catch (error) {
+    } catch {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to share invite' });
     }
   };
@@ -88,13 +99,21 @@ export const CrowdCard: React.FC<CrowdCardProps> = ({ crowd, onLeave }) => {
       <View className="flex-row" style={{ gap: 8 }}>
         {crowd.canInvite && (
           <View className="flex-1">
-            <QuietButton label="Invite" onPress={handleShareInvite} />
+            <QuietButton label="Invite" onPress={handleInvite} />
           </View>
         )}
         <View className="flex-1">
           <QuietButton label="Leave" onPress={() => onLeave(crowd)} />
         </View>
       </View>
+      {!crowd.isOpen && (
+        <PrivateInviteSheet
+          visible={privateInviteVisible}
+          crowdId={crowd.id}
+          crowdName={crowd.name}
+          onClose={() => setPrivateInviteVisible(false)}
+        />
+      )}
     </View>
   );
 };
