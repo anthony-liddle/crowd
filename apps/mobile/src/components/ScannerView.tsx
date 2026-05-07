@@ -1,45 +1,50 @@
 import React, { useEffect, useRef } from 'react';
-import { Modal, Text, View, Linking, Dimensions } from 'react-native';
+import { Text, View, Linking, Dimensions } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useColorScheme } from 'nativewind';
 import { PrimaryButton, QuietButton } from './Buttons';
 import { ViewfinderCorners } from './icons';
 
-interface ScanQrScreenProps {
-  visible: boolean;
+interface ScannerViewProps {
+  // True when this view is the active state in the parent flow. Used to
+  // re-arm the duplicate-scan latch each time scanning resumes.
+  active: boolean;
   onCancel: () => void;
   onScan: (raw: string) => void;
 }
 
-export const ScanQrScreen: React.FC<ScanQrScreenProps> = ({ visible, onCancel, onScan }) => {
+// Plain view (no Modal wrapper). Embedded inside JoinCrowdModal's single
+// flow Modal so scanner ↔ confirmation is a state transition, not a
+// modal-on-modal coordination — which iOS drops when transitions overlap.
+export const ScannerView: React.FC<ScannerViewProps> = ({ active, onCancel, onScan }) => {
   const [permission, requestPermission] = useCameraPermissions();
   // Suppress duplicate scans: a single QR detection often fires multiple
   // events from the camera within the same frame. We latch on first hit.
   const lockedRef = useRef(false);
 
   useEffect(() => {
-    if (visible) lockedRef.current = false;
-  }, [visible]);
+    if (active) lockedRef.current = false;
+  }, [active]);
+
+  if (!permission) return <View className="flex-1 bg-paper-d" />;
+
+  if (permission.status !== 'granted') {
+    return permission.canAskAgain ? (
+      <PermissionPrompt onRequest={requestPermission} onCancel={onCancel} />
+    ) : (
+      <PermissionDenied onCancel={onCancel} />
+    );
+  }
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onCancel}>
-      <View className="flex-1 bg-paper-d">
-        {!permission ? null : permission.status === 'granted' ? (
-          <ScannerSurface
-            onScan={(raw) => {
-              if (lockedRef.current) return;
-              lockedRef.current = true;
-              onScan(raw);
-            }}
-            onCancel={onCancel}
-          />
-        ) : permission.canAskAgain ? (
-          <PermissionPrompt onRequest={requestPermission} onCancel={onCancel} />
-        ) : (
-          <PermissionDenied onCancel={onCancel} />
-        )}
-      </View>
-    </Modal>
+    <ScannerSurface
+      onScan={(raw) => {
+        if (lockedRef.current) return;
+        lockedRef.current = true;
+        onScan(raw);
+      }}
+      onCancel={onCancel}
+    />
   );
 };
 
@@ -54,7 +59,7 @@ const ScannerSurface: React.FC<{ onScan: (raw: string) => void; onCancel: () => 
   const emberHex = colorScheme === 'dark' ? '#D08454' : '#B85A2C';
 
   return (
-    <View className="flex-1">
+    <View className="flex-1 bg-paper-d">
       <CameraView
         style={{ flex: 1 }}
         facing="back"
