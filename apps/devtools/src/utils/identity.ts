@@ -3,7 +3,11 @@ import { v4 as uuidv4 } from 'uuid';
 const STORAGE_KEY = 'crowd_user_id';
 const CROWD_USER_IDS_KEY = 'crowd_user_ids';
 
-export const getOrGenerateUserId = (): string => {
+/**
+ * The devtools' identity for the global feed. Mirrors the mobile app's
+ * `getOrGenerateGlobalUserId`. Never used for any Crowds operation.
+ */
+export const getOrGenerateGlobalUserId = (): string => {
   const existingId = localStorage.getItem(STORAGE_KEY);
   if (existingId) {
     return existingId;
@@ -14,47 +18,46 @@ export const getOrGenerateUserId = (): string => {
   return newId;
 };
 
-export const refreshUserId = (): string => {
+/** Forces a new global user ID. Dev-only — used to simulate rotation. */
+export const refreshGlobalUserId = (): string => {
   const newId = uuidv4();
   localStorage.setItem(STORAGE_KEY, newId);
   return newId;
 };
 
-/**
- * Retrieves or generates a crowd-specific user ID for a given crowd.
- * @param crowdId The ID of the crowd.
- * @returns The crowd-specific user ID as a string.
- */
-export const getOrGenerateCrowdUserId = (crowdId: string): string => {
-  const stored = localStorage.getItem(CROWD_USER_IDS_KEY);
-  let crowdUserIds: Record<string, string> = stored ? JSON.parse(stored) : {};
-
-  if (!crowdUserIds[crowdId]) {
-    crowdUserIds[crowdId] = uuidv4();
-    localStorage.setItem(CROWD_USER_IDS_KEY, JSON.stringify(crowdUserIds));
-  }
-
-  return crowdUserIds[crowdId];
-};
-
-/**
- * Deletes a crowd-specific user ID from localStorage.
- * @param crowdId The ID of the crowd.
- */
-export const deleteCrowdUserId = (crowdId: string): void => {
-  const stored = localStorage.getItem(CROWD_USER_IDS_KEY);
-  if (!stored) return;
-
-  const crowdUserIds: Record<string, string> = JSON.parse(stored);
-  delete crowdUserIds[crowdId];
-  localStorage.setItem(CROWD_USER_IDS_KEY, JSON.stringify(crowdUserIds));
-};
-
-/**
- * Retrieves all crowd-specific user IDs.
- * @returns A record mapping crowd IDs to user IDs.
- */
-export const getAllCrowdUserIds = (): Record<string, string> => {
+const readMap = (): Record<string, string> => {
   const stored = localStorage.getItem(CROWD_USER_IDS_KEY);
   return stored ? JSON.parse(stored) : {};
 };
+
+const writeMap = (map: Record<string, string>): void => {
+  localStorage.setItem(CROWD_USER_IDS_KEY, JSON.stringify(map));
+};
+
+/**
+ * The device's stable identity within a single crowd.
+ */
+export const getOrGenerateCrowdUserId = (crowdId: string): string => {
+  const map = readMap();
+  if (!map[crowdId]) {
+    map[crowdId] = uuidv4();
+    writeMap(map);
+  }
+  return map[crowdId];
+};
+
+/** Persists a pre-generated crowd-specific ID. Used by createCrowd. */
+export const storeCrowdUserId = (crowdId: string, crowdUserId: string): void => {
+  const map = readMap();
+  map[crowdId] = crowdUserId;
+  writeMap(map);
+};
+
+export const deleteCrowdUserId = (crowdId: string): void => {
+  const map = readMap();
+  if (!(crowdId in map)) return;
+  delete map[crowdId];
+  writeMap(map);
+};
+
+export const getAllCrowdUserIds = (): Record<string, string> => readMap();

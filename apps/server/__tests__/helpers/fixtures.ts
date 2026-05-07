@@ -24,12 +24,12 @@ export function validMessage(overrides: Partial<PostMessageDto> = {}): PostMessa
 }
 
 /**
- * Generate a valid crowd payload with random userId
+ * Generate a valid crowd payload with a random crowd-specific user ID.
  */
 export function validCrowd(overrides: Partial<CreateCrowdDto> = {}): CreateCrowdDto {
   return {
     name: 'Test Crowd',
-    userId: uuidv4(),
+    crowdUserId: uuidv4(),
     isOpen: true,
     ...overrides,
   };

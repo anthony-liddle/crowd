@@ -8,14 +8,14 @@ import {
   CreateCrowdSchema,
   JoinCrowdSchema,
   LeaveCrowdSchema,
-  QueryCrowdsSchema,
+  LookupCrowdsRequestSchema,
   CreateProximityTokenSchema,
   JoinWithTokenSchema,
   LookupTokenSchema,
 } from '@repo/shared';
 import { db } from './db/index';
 import { messages, messageBoosts, crowds, crowdMemberships, proximityTokens } from './db/schema';
-import { sql, asc, gt, and, eq, count, isNull } from 'drizzle-orm';
+import { sql, asc, gt, and, eq, or, inArray, count, isNull } from 'drizzle-orm';
 
 // 24 hours in milliseconds for crowd expiration
 const CROWD_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -67,6 +67,11 @@ export function buildApp(): FastifyInstance {
   // ==================== CROWDS API ====================
 
   // Create a new crowd
+  // Create a new crowd. The client pre-generates the crowd-specific user ID
+  // and sends it as `crowdUserId`; the server uses it for both `owner_id` on
+  // the crowd row and `user_id` on the auto-inserted membership row. The
+  // device's global feed identity never reaches this handler — see the note
+  // in CreateCrowdSchema for the full design rationale.
   server.post('/crowds', async (request, reply) => {
     try {
       const body = CreateCrowdSchema.parse(request.body);
@@ -74,19 +79,17 @@ export function buildApp(): FastifyInstance {
       const created = new Date();
       const expires = new Date(created.getTime() + CROWD_DURATION_MS);
 
-      // Create the crowd
       const [newCrowd] = await db.insert(crowds).values({
         name: body.name,
-        ownerId: body.userId,
+        ownerId: body.crowdUserId,
         isOpen: body.isOpen,
         createdAt: created,
         expiresAt: expires,
       }).returning({ id: crowds.id });
 
-      // Auto-add creator as member
       await db.insert(crowdMemberships).values({
         crowdId: newCrowd.id,
-        userId: body.userId,
+        userId: body.crowdUserId,
       });
 
       return { id: newCrowd.id };
@@ -99,15 +102,19 @@ export function buildApp(): FastifyInstance {
     }
   });
 
-  // Get user's active crowds
-  server.get('/crowds', async (request, reply) => {
+  // Look up the user's active crowds. Replaces the old GET /crowds. The
+  // client sends every crowd-specific ID it has stored; the server returns
+  // any non-expired crowd where one of those IDs matches either the
+  // membership row or the owner row. `isOwner` is computed by checking
+  // whether the crowd's owner_id appears in the supplied list.
+  server.post('/crowds/lookup', async (request, reply) => {
     try {
-      const query = QueryCrowdsSchema.parse(request.query);
-      const userId = query.userId;
+      const body = LookupCrowdsRequestSchema.parse(request.body);
+      const ids = body.crowdUserIds;
+      const idSet = new Set(ids);
 
-      // Get crowds where user is member and crowd is not expired
-      const userCrowds = await db
-        .select({
+      const matched = await db
+        .selectDistinct({
           id: crowds.id,
           name: crowds.name,
           isOpen: crowds.isOpen,
@@ -116,34 +123,37 @@ export function buildApp(): FastifyInstance {
           expiresAt: crowds.expiresAt,
         })
         .from(crowds)
-        .innerJoin(crowdMemberships, eq(crowds.id, crowdMemberships.crowdId))
+        .leftJoin(crowdMemberships, eq(crowds.id, crowdMemberships.crowdId))
         .where(and(
-          eq(crowdMemberships.userId, userId),
-          gt(crowds.expiresAt, new Date())
+          gt(crowds.expiresAt, new Date()),
+          or(
+            inArray(crowds.ownerId, ids),
+            inArray(crowdMemberships.userId, ids),
+          ),
         ));
 
-      // Get member counts for each crowd
-      const result = await Promise.all(userCrowds.map(async (crowd) => {
+      const result = await Promise.all(matched.map(async (crowd) => {
         const [memberCountResult] = await db
           .select({ count: count() })
           .from(crowdMemberships)
           .where(eq(crowdMemberships.crowdId, crowd.id));
 
+        const isOwner = idSet.has(crowd.ownerId);
         return {
           id: crowd.id,
           name: crowd.name,
           isOpen: crowd.isOpen,
-          isOwner: crowd.ownerId === userId,
+          isOwner,
           memberCount: memberCountResult?.count || 0,
           createdAt: crowd.createdAt,
           expiresAt: crowd.expiresAt,
-          canInvite: crowd.isOpen || crowd.ownerId === userId,
+          canInvite: crowd.isOpen || isOwner,
         };
       }));
 
       return result;
     } catch (err: any) {
-      request.log.error({ msg: 'Get Crowds Failed', error: err });
+      request.log.error({ msg: 'Lookup Crowds Failed', error: err });
       return reply.status(500).send({
         error: 'Internal Server Error',
         message: err.message,
@@ -151,13 +161,13 @@ export function buildApp(): FastifyInstance {
     }
   });
 
-  // Join a crowd
+  // Join an open crowd by ID. Membership is keyed by the caller's
+  // crowd-specific ID for this crowd.
   server.post('/crowds/:id/join', async (request, reply) => {
     try {
       const crowdId = (request.params as { id: string }).id;
       const body = JoinCrowdSchema.parse(request.body);
 
-      // 1. Check crowd exists and not expired
       const [crowd] = await db.select().from(crowds).where(eq(crowds.id, crowdId));
       if (!crowd) {
         return reply.status(404).send({ error: 'Crowd not found' });
@@ -165,25 +175,21 @@ export function buildApp(): FastifyInstance {
       if (crowd.expiresAt < new Date()) {
         return reply.status(400).send({ error: 'Crowd expired' });
       }
-
-      // 2. Check if crowd is open (closed crowds can only be joined via owner invite, not implemented yet)
       if (!crowd.isOpen) {
         return reply.status(400).send({ error: 'Crowd is closed' });
       }
 
-      // 3. Check if already a member
       const [existing] = await db.select().from(crowdMemberships).where(and(
         eq(crowdMemberships.crowdId, crowdId),
-        eq(crowdMemberships.userId, body.userId)
+        eq(crowdMemberships.userId, body.crowdUserId),
       ));
       if (existing) {
         return reply.status(400).send({ error: 'Already a member' });
       }
 
-      // 4. Add membership
       await db.insert(crowdMemberships).values({
         crowdId,
-        userId: body.userId,
+        userId: body.crowdUserId,
       });
 
       return { status: 'ok' };
@@ -196,8 +202,9 @@ export function buildApp(): FastifyInstance {
     }
   });
 
-  // Generate a proximity token for a crowd. Owner-only. Used to encode a
-  // QR/NFC payload that can be scanned to join (including private crowds).
+  // Generate a proximity token for a crowd. Owner-only. The owner check
+  // compares the supplied crowd-specific ID against `crowds.owner_id`, which
+  // was set to the same crowd-specific ID at create time.
   server.post('/crowds/:id/proximity-token', async (request, reply) => {
     try {
       const crowdId = (request.params as { id: string }).id;
@@ -210,7 +217,7 @@ export function buildApp(): FastifyInstance {
       if (crowd.expiresAt < new Date()) {
         return reply.status(400).send({ error: 'Crowd expired' });
       }
-      if (crowd.ownerId !== body.userId) {
+      if (crowd.ownerId !== body.crowdUserId) {
         return reply.status(403).send({ error: 'Only the owner can generate join codes' });
       }
 
@@ -312,12 +319,12 @@ export function buildApp(): FastifyInstance {
 
       const [existing] = await db.select().from(crowdMemberships).where(and(
         eq(crowdMemberships.crowdId, tokenRow.crowdId),
-        eq(crowdMemberships.userId, body.userId)
+        eq(crowdMemberships.userId, body.crowdUserId)
       ));
       if (!existing) {
         await db.insert(crowdMemberships).values({
           crowdId: tokenRow.crowdId,
-          userId: body.userId,
+          userId: body.crowdUserId,
         });
       }
 
@@ -349,7 +356,10 @@ export function buildApp(): FastifyInstance {
     }
   });
 
-  // Leave a crowd
+  // Leave a crowd. Removes the membership row keyed by the caller's
+  // crowd-specific ID. Idempotent: deleting a non-existent membership
+  // returns ok. owner_id is unaffected — an owner who leaves keeps their
+  // crowd appearing in the lookup endpoint via the owner-match clause.
   server.post('/crowds/:id/leave', async (request, reply) => {
     try {
       const crowdId = (request.params as { id: string }).id;
@@ -357,7 +367,7 @@ export function buildApp(): FastifyInstance {
 
       await db.delete(crowdMemberships).where(and(
         eq(crowdMemberships.crowdId, crowdId),
-        eq(crowdMemberships.userId, body.userId)
+        eq(crowdMemberships.userId, body.crowdUserId),
       ));
 
       return { status: 'ok' };

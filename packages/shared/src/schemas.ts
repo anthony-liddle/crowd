@@ -44,18 +44,24 @@ export const BoostMessageSchema = z.object({
 });
 
 // Crowds API Schemas
+//
+// Every Crowds endpoint takes a crowd-specific user ID (`crowdUserId`).
+// The device's global feed identity (rotated via `getOrGenerateGlobalUserId`)
+// is never sent to any Crowds endpoint, by design — see Round 4 in
+// docs/feats and PR #68. Crowd-specific IDs are stable for the lifetime of
+// the user's membership in a single crowd; they survive global ID rotation.
 export const CreateCrowdSchema = z.object({
   name: z.string().min(1).max(50),
   isOpen: z.boolean().default(true),
-  userId: z.string().uuid(),
+  crowdUserId: z.string().uuid(),
 });
 
 export const JoinCrowdSchema = z.object({
-  userId: z.string().uuid(),
+  crowdUserId: z.string().uuid(),
 });
 
 export const LeaveCrowdSchema = z.object({
-  userId: z.string().uuid(),
+  crowdUserId: z.string().uuid(),
 });
 
 export const CrowdSchema = z.object({
@@ -69,27 +75,23 @@ export const CrowdSchema = z.object({
   canInvite: z.boolean(), // true if open or if user is owner
 });
 
-export const QueryCrowdsSchema = z.object({
-  userId: z.string().uuid(),
-});
-
-// Schema for rotating membership from one user ID to another
-export const RotateMembershipSchema = z.object({
-  crowdId: z.string().uuid(),
-  oldUserId: z.string().uuid(),
-  newUserId: z.string().uuid(),
+// Lookup request: client sends every crowd-specific ID it has stored.
+// Server returns crowds the device is a member of OR owns (matching either
+// crowdMemberships.user_id or crowds.owner_id against the supplied list).
+export const LookupCrowdsRequestSchema = z.object({
+  crowdUserIds: z.array(z.string().uuid()).min(1),
 });
 
 // Proximity-token schemas. Owner generates a short-lived single-use token
 // that is encoded into a QR/NFC payload; any user can present that token
 // to /crowds/join-with-token to join the crowd, including private ones.
 export const CreateProximityTokenSchema = z.object({
-  userId: z.string().uuid(),
+  crowdUserId: z.string().uuid(),
 });
 
 export const JoinWithTokenSchema = z.object({
   token: z.string().min(16).max(128),
-  userId: z.string().uuid(),
+  crowdUserId: z.string().uuid(),
 });
 
 export const LookupTokenSchema = z.object({
@@ -169,8 +171,7 @@ export type CreateCrowdDto = z.infer<typeof CreateCrowdSchema>;
 export type JoinCrowdDto = z.infer<typeof JoinCrowdSchema>;
 export type LeaveCrowdDto = z.infer<typeof LeaveCrowdSchema>;
 export type CrowdDto = z.infer<typeof CrowdSchema>;
-export type QueryCrowdsDto = z.infer<typeof QueryCrowdsSchema>;
-export type RotateMembershipDto = z.infer<typeof RotateMembershipSchema>;
+export type LookupCrowdsRequestDto = z.infer<typeof LookupCrowdsRequestSchema>;
 export type MessageResponse = z.infer<typeof MessageResponseSchema>;
 export type CrowdResponse = z.infer<typeof CrowdResponseSchema>;
 export type IdResponse = z.infer<typeof IdResponseSchema>;

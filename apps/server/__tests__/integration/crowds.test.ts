@@ -5,6 +5,16 @@ import { createTestApp } from '../helpers/createApp';
 import { validCrowd, randomUuid } from '../helpers/fixtures';
 import { Pool } from 'pg';
 
+// Helpers — POST /crowds/lookup is the new "list" surface. These thin
+// wrappers keep the test bodies focused on assertions rather than payload
+// plumbing.
+const lookupFor = async (app: FastifyInstance, ids: string[]) =>
+  app.inject({
+    method: 'POST',
+    url: '/crowds/lookup',
+    payload: { crowdUserIds: ids },
+  });
+
 describe('Crowds API', () => {
   let app: FastifyInstance;
 
@@ -38,150 +48,169 @@ describe('Crowds API', () => {
       expect(body.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     });
 
-    it('should auto-add creator as member', async () => {
-      const userId = randomUuid();
-      const crowd = validCrowd({ userId });
+    it('keys both ownership and membership by the supplied crowdUserId', async () => {
+      const crowdUserId = randomUuid();
+      const crowd = validCrowd({ crowdUserId });
 
       const createResponse = await app.inject({
         method: 'POST',
         url: '/crowds',
         payload: crowd,
       });
-
       const crowdId = createResponse.json().id;
 
-      // Get crowds for user
-      const listResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${userId}`,
-      });
-
+      // The crowd is visible via the lookup endpoint when keyed on the
+      // crowdUserId, with isOwner=true (owner_id matched the supplied id).
+      const listResponse = await lookupFor(app, [crowdUserId]);
       const crowds = listResponse.json();
       expect(crowds.length).toBe(1);
       expect(crowds[0].id).toBe(crowdId);
+      expect(crowds[0].isOwner).toBe(true);
+      expect(crowds[0].memberCount).toBe(1); // creator auto-membership
+
+      // An unrelated id sees nothing.
+      const otherResponse = await lookupFor(app, [randomUuid()]);
+      expect(otherResponse.json()).toEqual([]);
     });
 
     it('should set 24h expiration', async () => {
       const beforeCreate = new Date();
       const crowd = validCrowd();
 
-      const response = await app.inject({
+      await app.inject({
         method: 'POST',
         url: '/crowds',
         payload: crowd,
       });
 
-      // Get crowd details
-      const listResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${crowd.userId}`,
-      });
-
+      const listResponse = await lookupFor(app, [crowd.crowdUserId]);
       const crowds = listResponse.json();
       const expiresAt = new Date(crowds[0].expiresAt);
       const expectedExpiry = new Date(beforeCreate.getTime() + 24 * 60 * 60 * 1000);
 
-      // Allow 5 second tolerance
       expect(Math.abs(expiresAt.getTime() - expectedExpiry.getTime())).toBeLessThan(5000);
-    });
-
-    it('should set creator as owner (isOwner=true)', async () => {
-      const userId = randomUuid();
-      const crowd = validCrowd({ userId });
-
-      await app.inject({
-        method: 'POST',
-        url: '/crowds',
-        payload: crowd,
-      });
-
-      const listResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${userId}`,
-      });
-
-      const crowds = listResponse.json();
-      expect(crowds[0].isOwner).toBe(true);
     });
   });
 
-  describe('GET /crowds', () => {
-    it('should return user crowds with memberCount', async () => {
-      const userId = randomUuid();
+  describe('POST /crowds/lookup', () => {
+    it('should return crowds with memberCount', async () => {
+      const ownerId = randomUuid();
 
       await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId, name: 'Crowd 1' }),
+        payload: validCrowd({ crowdUserId: ownerId, name: 'Crowd 1' }),
       });
 
+      // The same id can own multiple crowds in this test harness — each
+      // create starts a new crowd row keyed by the same crowdUserId. In
+      // production, devices generate a fresh crowdUserId per crowd; the
+      // lookup-set semantics behave the same in either case.
       await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId, name: 'Crowd 2' }),
+        payload: validCrowd({ crowdUserId: ownerId, name: 'Crowd 2' }),
       });
 
-      const listResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${userId}`,
-      });
-
+      const listResponse = await lookupFor(app, [ownerId]);
       const crowds = listResponse.json();
       expect(crowds.length).toBe(2);
       crowds.forEach((crowd: any) => {
-        expect(crowd.memberCount).toBeDefined();
-        expect(crowd.memberCount).toBe(1); // Only creator
+        expect(crowd.memberCount).toBe(1);
       });
     });
 
-    it('should include canInvite flag', async () => {
-      const userId = randomUuid();
+    it('returns canInvite=true for owner on closed crowd, true for members on open crowd', async () => {
+      const ownerId = randomUuid();
 
-      // Open crowd
       await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId, name: 'Open Crowd', isOpen: true }),
+        payload: validCrowd({ crowdUserId: ownerId, name: 'Open Crowd', isOpen: true }),
       });
 
-      // Closed crowd
       await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId, name: 'Closed Crowd', isOpen: false }),
+        payload: validCrowd({ crowdUserId: ownerId, name: 'Closed Crowd', isOpen: false }),
       });
 
-      const listResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${userId}`,
-      });
-
-      const crowds = listResponse.json();
+      const crowds = (await lookupFor(app, [ownerId])).json();
       const openCrowd = crowds.find((c: any) => c.name === 'Open Crowd');
       const closedCrowd = crowds.find((c: any) => c.name === 'Closed Crowd');
 
-      // Owner can always invite
       expect(openCrowd.canInvite).toBe(true);
       expect(closedCrowd.canInvite).toBe(true);
     });
 
-    it('should not return crowds where user is not a member', async () => {
-      const user1 = randomUuid();
-      const user2 = randomUuid();
+    it('matches by membership OR ownership', async () => {
+      const ownerId = randomUuid();
+      const joinerId = randomUuid();
+
+      const create = await app.inject({
+        method: 'POST',
+        url: '/crowds',
+        payload: validCrowd({ crowdUserId: ownerId, isOpen: true }),
+      });
+      const crowdId = create.json().id;
 
       await app.inject({
         method: 'POST',
+        url: `/crowds/${crowdId}/join`,
+        payload: { crowdUserId: joinerId },
+      });
+
+      // Either id surfaces the crowd; isOwner reflects which side matched.
+      const ownerView = (await lookupFor(app, [ownerId])).json();
+      expect(ownerView.length).toBe(1);
+      expect(ownerView[0].isOwner).toBe(true);
+
+      const joinerView = (await lookupFor(app, [joinerId])).json();
+      expect(joinerView.length).toBe(1);
+      expect(joinerView[0].isOwner).toBe(false);
+    });
+
+    it('owner who left their own crowd still sees it via owner-match', async () => {
+      const ownerId = randomUuid();
+
+      const create = await app.inject({
+        method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId: user1, name: 'User1 Crowd' }),
+        payload: validCrowd({ crowdUserId: ownerId, isOpen: true }),
+      });
+      const crowdId = create.json().id;
+
+      await app.inject({
+        method: 'POST',
+        url: `/crowds/${crowdId}/leave`,
+        payload: { crowdUserId: ownerId },
       });
 
-      const listResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${user2}`,
+      const view = (await lookupFor(app, [ownerId])).json();
+      expect(view.length).toBe(1);
+      expect(view[0].isOwner).toBe(true);
+      expect(view[0].memberCount).toBe(0);
+    });
+
+    it('returns empty array when no ids match', async () => {
+      const someoneElse = randomUuid();
+      await app.inject({
+        method: 'POST',
+        url: '/crowds',
+        payload: validCrowd({ crowdUserId: someoneElse }),
       });
 
-      const crowds = listResponse.json();
-      expect(crowds.length).toBe(0);
+      const view = (await lookupFor(app, [randomUuid()])).json();
+      expect(view).toEqual([]);
+    });
+
+    it('rejects empty crowdUserIds list at the schema layer', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/crowds/lookup',
+        payload: { crowdUserIds: [] },
+      });
+      expect(response.statusCode).toBe(500); // Zod surfaces as 500 in this handler shape
     });
   });
 
@@ -193,28 +222,23 @@ describe('Crowds API', () => {
       const createResponse = await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId: ownerId, isOpen: true }),
+        payload: validCrowd({ crowdUserId: ownerId, isOpen: true }),
       });
       const crowdId = createResponse.json().id;
 
       const joinResponse = await app.inject({
         method: 'POST',
         url: `/crowds/${crowdId}/join`,
-        payload: { userId: joinerId },
+        payload: { crowdUserId: joinerId },
       });
 
       expect(joinResponse.statusCode).toBe(200);
       expect(joinResponse.json().status).toBe('ok');
 
-      // Verify membership
-      const listResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${joinerId}`,
-      });
-
-      const crowds = listResponse.json();
+      const crowds = (await lookupFor(app, [joinerId])).json();
       expect(crowds.length).toBe(1);
       expect(crowds[0].id).toBe(crowdId);
+      expect(crowds[0].isOwner).toBe(false);
     });
 
     it('should reject joining closed crowd', async () => {
@@ -224,14 +248,14 @@ describe('Crowds API', () => {
       const createResponse = await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId: ownerId, isOpen: false }),
+        payload: validCrowd({ crowdUserId: ownerId, isOpen: false }),
       });
       const crowdId = createResponse.json().id;
 
       const joinResponse = await app.inject({
         method: 'POST',
         url: `/crowds/${crowdId}/join`,
-        payload: { userId: joinerId },
+        payload: { crowdUserId: joinerId },
       });
 
       expect(joinResponse.statusCode).toBe(400);
@@ -245,41 +269,34 @@ describe('Crowds API', () => {
       const createResponse = await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId: ownerId, isOpen: true }),
+        payload: validCrowd({ crowdUserId: ownerId, isOpen: true }),
       });
       const crowdId = createResponse.json().id;
 
-      // First join
       await app.inject({
         method: 'POST',
         url: `/crowds/${crowdId}/join`,
-        payload: { userId: joinerId },
+        payload: { crowdUserId: joinerId },
       });
 
-      // Duplicate join - should fail (400 or 500 depending on error handling)
       const duplicateResponse = await app.inject({
         method: 'POST',
         url: `/crowds/${crowdId}/join`,
-        payload: { userId: joinerId },
+        payload: { crowdUserId: joinerId },
       });
 
-      // Verify it's not successful (either 400 if caught or 500 if not)
       expect(duplicateResponse.statusCode).toBeGreaterThanOrEqual(400);
       expect(duplicateResponse.statusCode).toBeLessThan(600);
 
-      // Verify member count didn't change (still 2: owner + joiner)
-      const listResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${ownerId}`,
-      });
-      expect(listResponse.json()[0].memberCount).toBe(2);
+      const crowds = (await lookupFor(app, [ownerId])).json();
+      expect(crowds[0].memberCount).toBe(2);
     });
 
     it('should return 404 for non-existent crowd', async () => {
       const joinResponse = await app.inject({
         method: 'POST',
         url: `/crowds/${randomUuid()}/join`,
-        payload: { userId: randomUuid() },
+        payload: { crowdUserId: randomUuid() },
       });
 
       expect(joinResponse.statusCode).toBe(404);
@@ -293,30 +310,21 @@ describe('Crowds API', () => {
       const createResponse = await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId: ownerId, isOpen: true }),
+        payload: validCrowd({ crowdUserId: ownerId, isOpen: true }),
       });
       const crowdId = createResponse.json().id;
 
-      // Check initial count
-      const beforeResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${ownerId}`,
-      });
-      expect(beforeResponse.json()[0].memberCount).toBe(1);
+      const before = (await lookupFor(app, [ownerId])).json();
+      expect(before[0].memberCount).toBe(1);
 
-      // Join
       await app.inject({
         method: 'POST',
         url: `/crowds/${crowdId}/join`,
-        payload: { userId: joinerId },
+        payload: { crowdUserId: joinerId },
       });
 
-      // Check updated count
-      const afterResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${ownerId}`,
-      });
-      expect(afterResponse.json()[0].memberCount).toBe(2);
+      const after = (await lookupFor(app, [ownerId])).json();
+      expect(after[0].memberCount).toBe(2);
     });
   });
 
@@ -328,40 +336,28 @@ describe('Crowds API', () => {
       const createResponse = await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId: ownerId, isOpen: true }),
+        payload: validCrowd({ crowdUserId: ownerId, isOpen: true }),
       });
       const crowdId = createResponse.json().id;
 
-      // Join
       await app.inject({
         method: 'POST',
         url: `/crowds/${crowdId}/join`,
-        payload: { userId: memberId },
+        payload: { crowdUserId: memberId },
       });
 
-      // Verify membership
-      const beforeLeaveResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${memberId}`,
-      });
-      expect(beforeLeaveResponse.json().length).toBe(1);
+      expect((await lookupFor(app, [memberId])).json().length).toBe(1);
 
-      // Leave
       const leaveResponse = await app.inject({
         method: 'POST',
         url: `/crowds/${crowdId}/leave`,
-        payload: { userId: memberId },
+        payload: { crowdUserId: memberId },
       });
 
       expect(leaveResponse.statusCode).toBe(200);
       expect(leaveResponse.json().status).toBe('ok');
 
-      // Verify no longer member
-      const afterLeaveResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${memberId}`,
-      });
-      expect(afterLeaveResponse.json().length).toBe(0);
+      expect((await lookupFor(app, [memberId])).json().length).toBe(0);
     });
 
     it('should be idempotent for non-member', async () => {
@@ -371,21 +367,47 @@ describe('Crowds API', () => {
       const createResponse = await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId: ownerId, isOpen: true }),
+        payload: validCrowd({ crowdUserId: ownerId, isOpen: true }),
       });
       const crowdId = createResponse.json().id;
 
-      // Leave without being a member
       const leaveResponse = await app.inject({
         method: 'POST',
         url: `/crowds/${crowdId}/leave`,
-        payload: { userId: nonMemberId },
+        payload: { crowdUserId: nonMemberId },
       });
 
       expect(leaveResponse.statusCode).toBe(200);
       expect(leaveResponse.json().status).toBe('ok');
     });
 
+    it('should decrement memberCount after leave', async () => {
+      const ownerId = randomUuid();
+      const memberId = randomUuid();
+
+      const createResponse = await app.inject({
+        method: 'POST',
+        url: '/crowds',
+        payload: validCrowd({ crowdUserId: ownerId, isOpen: true }),
+      });
+      const crowdId = createResponse.json().id;
+
+      await app.inject({
+        method: 'POST',
+        url: `/crowds/${crowdId}/join`,
+        payload: { crowdUserId: memberId },
+      });
+
+      expect((await lookupFor(app, [ownerId])).json()[0].memberCount).toBe(2);
+
+      await app.inject({
+        method: 'POST',
+        url: `/crowds/${crowdId}/leave`,
+        payload: { crowdUserId: memberId },
+      });
+
+      expect((await lookupFor(app, [ownerId])).json()[0].memberCount).toBe(1);
+    });
   });
 
   describe('Proximity tokens', () => {
@@ -393,13 +415,13 @@ describe('Crowds API', () => {
       const create = await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId: ownerId, isOpen }),
+        payload: validCrowd({ crowdUserId: ownerId, isOpen }),
       });
       const crowdId = create.json().id;
       const tokenRes = await app.inject({
         method: 'POST',
         url: `/crowds/${crowdId}/proximity-token`,
-        payload: { userId: ownerId },
+        payload: { crowdUserId: ownerId },
       });
       return { crowdId, response: tokenRes };
     };
@@ -420,13 +442,13 @@ describe('Crowds API', () => {
       const create = await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: validCrowd({ userId: ownerId }),
+        payload: validCrowd({ crowdUserId: ownerId }),
       });
       const crowdId = create.json().id;
       const res = await app.inject({
         method: 'POST',
         url: `/crowds/${crowdId}/proximity-token`,
-        payload: { userId: intruderId },
+        payload: { crowdUserId: intruderId },
       });
       expect(res.statusCode).toBe(403);
     });
@@ -444,7 +466,6 @@ describe('Crowds API', () => {
       expect(first.statusCode).toBe(200);
       expect(first.json().crowd.isOpen).toBe(false);
 
-      // Lookup is idempotent — token still usable.
       const second = await app.inject({
         method: 'POST',
         url: '/crowds/lookup-token',
@@ -462,16 +483,15 @@ describe('Crowds API', () => {
       const joinRes = await app.inject({
         method: 'POST',
         url: '/crowds/join-with-token',
-        payload: { token, userId: joinerId },
+        payload: { token, crowdUserId: joinerId },
       });
       expect(joinRes.statusCode).toBe(200);
       expect(joinRes.json().crowd.id).toBe(crowdId);
 
-      // Reusing the token must fail.
       const replay = await app.inject({
         method: 'POST',
         url: '/crowds/join-with-token',
-        payload: { token, userId: randomUuid() },
+        payload: { token, crowdUserId: randomUuid() },
       });
       expect(replay.statusCode).toBe(400);
       expect(replay.json().error).toMatch(/used/i);
@@ -482,8 +502,8 @@ describe('Crowds API', () => {
       const { response } = await mintToken(ownerId);
       const { token } = response.json();
 
-      // Reach into the test DB to backdate the token's expiry — emulating
-      // the 5-minute TTL elapsing without sleeping the suite.
+      // Backdate the token's expiry directly in the test DB so we can
+      // exercise the expiration branch without sleeping the suite.
       const pool = new Pool({ connectionString: getConnectionString()! });
       try {
         await pool.query(
@@ -505,7 +525,7 @@ describe('Crowds API', () => {
       const join = await app.inject({
         method: 'POST',
         url: '/crowds/join-with-token',
-        payload: { token, userId: randomUuid() },
+        payload: { token, crowdUserId: randomUuid() },
       });
       expect(join.statusCode).toBe(400);
     });
@@ -514,7 +534,7 @@ describe('Crowds API', () => {
       const join = await app.inject({
         method: 'POST',
         url: '/crowds/join-with-token',
-        payload: { token: 'a'.repeat(43), userId: randomUuid() },
+        payload: { token: 'a'.repeat(43), crowdUserId: randomUuid() },
       });
       expect(join.statusCode).toBe(404);
       expect(join.json().error).toMatch(/invalid/i);
@@ -524,51 +544,9 @@ describe('Crowds API', () => {
       const join = await app.inject({
         method: 'POST',
         url: '/crowds/join-with-token',
-        payload: { token: 'short', userId: randomUuid() },
+        payload: { token: 'short', crowdUserId: randomUuid() },
       });
-      expect(join.statusCode).toBe(500); // ZodError surfaced as 500 by current handler
-    });
-  });
-
-  describe('POST /crowds/:id/leave (cont.)', () => {
-    it('should decrement memberCount after leave', async () => {
-      const ownerId = randomUuid();
-      const memberId = randomUuid();
-
-      const createResponse = await app.inject({
-        method: 'POST',
-        url: '/crowds',
-        payload: validCrowd({ userId: ownerId, isOpen: true }),
-      });
-      const crowdId = createResponse.json().id;
-
-      // Join
-      await app.inject({
-        method: 'POST',
-        url: `/crowds/${crowdId}/join`,
-        payload: { userId: memberId },
-      });
-
-      // Check count = 2
-      const beforeResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${ownerId}`,
-      });
-      expect(beforeResponse.json()[0].memberCount).toBe(2);
-
-      // Leave
-      await app.inject({
-        method: 'POST',
-        url: `/crowds/${crowdId}/leave`,
-        payload: { userId: memberId },
-      });
-
-      // Check count = 1
-      const afterResponse = await app.inject({
-        method: 'GET',
-        url: `/crowds?userId=${ownerId}`,
-      });
-      expect(afterResponse.json()[0].memberCount).toBe(1);
+      expect(join.statusCode).toBe(500);
     });
   });
 });

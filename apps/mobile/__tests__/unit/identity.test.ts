@@ -1,7 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
 import {
-  getOrGenerateUserId,
+  getOrGenerateGlobalUserId,
   getOrGenerateCrowdUserId,
+  storeCrowdUserId,
+  getAllCrowdUserIds,
   deleteCrowdUserId,
   updateRotationClock,
   getRotationClock,
@@ -22,9 +24,9 @@ describe('identity utils', () => {
     jest.clearAllMocks();
   });
 
-  describe('getOrGenerateUserId', () => {
+  describe('getOrGenerateGlobalUserId', () => {
     it('generates new UUID when none exists', async () => {
-      const userId = await getOrGenerateUserId();
+      const userId = await getOrGenerateGlobalUserId();
 
       expect(userId).toBeDefined();
       expect(SecureStore.setItemAsync).toHaveBeenCalled();
@@ -34,7 +36,7 @@ describe('identity utils', () => {
       const existingId = 'existing-user-id';
       await SecureStore.setItemAsync('crowd_user_id', existingId);
 
-      const userId = await getOrGenerateUserId();
+      const userId = await getOrGenerateGlobalUserId();
 
       expect(userId).toBe(existingId);
     });
@@ -46,10 +48,46 @@ describe('identity utils', () => {
       await SecureStore.setItemAsync('crowd_user_id', existingId);
       await SecureStore.setItemAsync('crowd_rotation_clock', pastClock);
 
-      const userId = await getOrGenerateUserId();
+      const userId = await getOrGenerateGlobalUserId();
 
       // Should generate a new ID
       expect(userId).not.toBe(existingId);
+    });
+  });
+
+  describe('storeCrowdUserId / getAllCrowdUserIds', () => {
+    it('persists a pre-generated id under the given crowdId', async () => {
+      await storeCrowdUserId('crowd-A', 'pre-gen-A');
+
+      const stored = await SecureStore.getItemAsync('crowd_user_ids');
+      expect(stored && JSON.parse(stored)).toEqual({ 'crowd-A': 'pre-gen-A' });
+    });
+
+    it('overwrites any existing entry for the same crowdId', async () => {
+      await SecureStore.setItemAsync(
+        'crowd_user_ids',
+        JSON.stringify({ 'crowd-A': 'old' }),
+      );
+
+      await storeCrowdUserId('crowd-A', 'new');
+
+      const stored = await SecureStore.getItemAsync('crowd_user_ids');
+      expect(stored && JSON.parse(stored)).toEqual({ 'crowd-A': 'new' });
+    });
+
+    it('returns the full {crowdId: crowdUserId} map', async () => {
+      await SecureStore.setItemAsync(
+        'crowd_user_ids',
+        JSON.stringify({ 'crowd-A': 'a', 'crowd-B': 'b' }),
+      );
+
+      const map = await getAllCrowdUserIds();
+      expect(map).toEqual({ 'crowd-A': 'a', 'crowd-B': 'b' });
+    });
+
+    it('returns an empty map when nothing stored', async () => {
+      const map = await getAllCrowdUserIds();
+      expect(map).toEqual({});
     });
   });
 
