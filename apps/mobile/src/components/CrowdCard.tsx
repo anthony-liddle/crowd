@@ -34,9 +34,11 @@ export const CrowdCard: React.FC<CrowdCardProps> = ({ crowd, onLeave }) => {
     }
     const inviteLink = `crowd://join/${crowd.id}`;
     try {
+      // iMessage on iOS renders `url` as a separate message component,
+      // producing two messages. Embedding the link in `message` gives a
+      // single tappable message.
       await Share.share({
         message: `Join my crowd "${crowd.name}": ${inviteLink}`,
-        url: inviteLink,
       });
     } catch {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to share invite' });
