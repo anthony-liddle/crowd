@@ -188,7 +188,7 @@ describe('ApiClient', () => {
   describe('crowds.create()', () => {
     const validCrowd = {
       name: 'Test Crowd',
-      userId: mockUserId,
+      crowdUserId: mockUserId,
     };
 
     it('should create crowd and return ID', async () => {
@@ -223,15 +223,17 @@ describe('ApiClient', () => {
     });
   });
 
-  describe('crowds.list()', () => {
+  describe('crowds.lookup()', () => {
+    const validLookup = { crowdUserIds: [mockUserId] };
+
     it('should return crowd array', async () => {
-      const result = await api.crowds.list(mockUserId);
+      const result = await api.crowds.lookup(validLookup);
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBeGreaterThan(0);
     });
 
     it('should validate crowd response fields', async () => {
-      const result = await api.crowds.list(mockUserId);
+      const result = await api.crowds.lookup(validLookup);
       expect(result[0]).toHaveProperty('id');
       expect(result[0]).toHaveProperty('name');
       expect(result[0]).toHaveProperty('isOpen');
@@ -239,26 +241,36 @@ describe('ApiClient', () => {
     });
 
     it('should coerce date strings in response', async () => {
-      const result = await api.crowds.list(mockUserId);
+      const result = await api.crowds.lookup(validLookup);
       expect(result[0].createdAt).toBeInstanceOf(Date);
       expect(result[0].expiresAt).toBeInstanceOf(Date);
     });
 
     it('should handle empty response', async () => {
       server.use(
-        http.get('http://localhost:8080/crowds', () => {
+        http.post('http://localhost:8080/crowds/lookup', () => {
           return HttpResponse.json([]);
         })
       );
 
-      const result = await api.crowds.list(mockUserId);
+      const result = await api.crowds.lookup(validLookup);
       expect(result).toEqual([]);
+    });
+
+    it('should throw validation error for empty id list', async () => {
+      await expect(api.crowds.lookup({ crowdUserIds: [] })).rejects.toThrow();
+    });
+
+    it('should throw validation error for non-uuid id', async () => {
+      await expect(
+        api.crowds.lookup({ crowdUserIds: ['not-a-uuid'] }),
+      ).rejects.toThrow();
     });
   });
 
   describe('crowds.join()', () => {
     const validJoin = {
-      userId: mockUserId,
+      crowdUserId: mockUserId,
     };
 
     it('should join crowd and return status', async () => {
@@ -289,7 +301,7 @@ describe('ApiClient', () => {
 
   describe('crowds.leave()', () => {
     const validLeave = {
-      userId: mockUserId,
+      crowdUserId: mockUserId,
     };
 
     it('should leave crowd and return status', async () => {

@@ -77,8 +77,8 @@ export const CrowdsScreen: React.FC = () => {
 
   const handleLeave = (crowd: Crowd) => {
     Alert.alert(
-      'Leave Crowd',
-      `Are you sure you want to leave "${crowd.name}"?`,
+      `Leave ${crowd.name}?`,
+      "You won't see new posts here unless you rejoin.",
       [
         { text: 'Cancel', style: 'cancel' },
         {

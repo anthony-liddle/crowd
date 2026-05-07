@@ -72,8 +72,8 @@ export const handlers = [
     return HttpResponse.json({ id: mockCrowdId });
   }),
 
-  // List crowds
-  http.get(`${BASE_URL}/crowds`, () => {
+  // Lookup crowds
+  http.post(`${BASE_URL}/crowds/lookup`, () => {
     return HttpResponse.json([mockCrowd]);
   }),
 

@@ -10,8 +10,7 @@ import {
   StatusResponseSchema,
   JoinCrowdSchema,
   LeaveCrowdSchema,
-  QueryCrowdsSchema,
-  RotateMembershipSchema,
+  LookupCrowdsRequestSchema,
 } from '../src/schemas';
 
 describe('PostMessageSchema', () => {
@@ -352,7 +351,7 @@ describe('BoostMessageSchema', () => {
 describe('CreateCrowdSchema', () => {
   const validCrowd = {
     name: 'Test Crowd',
-    userId: '123e4567-e89b-12d3-a456-426614174000',
+    crowdUserId: '123e4567-e89b-12d3-a456-426614174000',
   };
 
   it('should accept valid crowd payload', () => {
@@ -414,10 +413,10 @@ describe('CreateCrowdSchema', () => {
     }
   });
 
-  it('should reject invalid UUID for userId', () => {
+  it('should reject invalid UUID for crowdUserId', () => {
     const result = CreateCrowdSchema.safeParse({
       ...validCrowd,
-      userId: 'invalid-uuid',
+      crowdUserId: 'invalid-uuid',
     });
     expect(result.success).toBe(false);
   });
@@ -514,86 +513,59 @@ describe('StatusResponseSchema', () => {
 });
 
 describe('JoinCrowdSchema', () => {
-  it('should accept valid userId', () => {
+  it('should accept valid crowdUserId', () => {
     const result = JoinCrowdSchema.safeParse({
-      userId: '123e4567-e89b-12d3-a456-426614174000',
+      crowdUserId: '123e4567-e89b-12d3-a456-426614174000',
     });
     expect(result.success).toBe(true);
   });
 
   it('should reject invalid UUID', () => {
     const result = JoinCrowdSchema.safeParse({
-      userId: 'invalid-uuid',
+      crowdUserId: 'invalid-uuid',
     });
     expect(result.success).toBe(false);
   });
 });
 
 describe('LeaveCrowdSchema', () => {
-  it('should accept valid userId', () => {
+  it('should accept valid crowdUserId', () => {
     const result = LeaveCrowdSchema.safeParse({
-      userId: '123e4567-e89b-12d3-a456-426614174000',
+      crowdUserId: '123e4567-e89b-12d3-a456-426614174000',
     });
     expect(result.success).toBe(true);
   });
 
   it('should reject invalid UUID', () => {
     const result = LeaveCrowdSchema.safeParse({
-      userId: 'invalid-uuid',
+      crowdUserId: 'invalid-uuid',
     });
     expect(result.success).toBe(false);
   });
 });
 
-describe('QueryCrowdsSchema', () => {
-  it('should accept valid userId', () => {
-    const result = QueryCrowdsSchema.safeParse({
-      userId: '123e4567-e89b-12d3-a456-426614174000',
+describe('LookupCrowdsRequestSchema', () => {
+  const validId = '123e4567-e89b-12d3-a456-426614174000';
+
+  it('should accept a single id', () => {
+    const result = LookupCrowdsRequestSchema.safeParse({ crowdUserIds: [validId] });
+    expect(result.success).toBe(true);
+  });
+
+  it('should accept multiple ids', () => {
+    const result = LookupCrowdsRequestSchema.safeParse({
+      crowdUserIds: [validId, '223e4567-e89b-12d3-a456-426614174001'],
     });
     expect(result.success).toBe(true);
   });
 
-  it('should reject invalid UUID', () => {
-    const result = QueryCrowdsSchema.safeParse({
-      userId: 'invalid-uuid',
-    });
-    expect(result.success).toBe(false);
-  });
-});
-
-describe('RotateMembershipSchema', () => {
-  const validRotation = {
-    crowdId: '123e4567-e89b-12d3-a456-426614174000',
-    oldUserId: '223e4567-e89b-12d3-a456-426614174001',
-    newUserId: '323e4567-e89b-12d3-a456-426614174002',
-  };
-
-  it('should accept valid rotation payload', () => {
-    const result = RotateMembershipSchema.safeParse(validRotation);
-    expect(result.success).toBe(true);
-  });
-
-  it('should reject invalid crowdId UUID', () => {
-    const result = RotateMembershipSchema.safeParse({
-      ...validRotation,
-      crowdId: 'invalid',
-    });
+  it('should reject an empty list', () => {
+    const result = LookupCrowdsRequestSchema.safeParse({ crowdUserIds: [] });
     expect(result.success).toBe(false);
   });
 
-  it('should reject invalid oldUserId UUID', () => {
-    const result = RotateMembershipSchema.safeParse({
-      ...validRotation,
-      oldUserId: 'invalid',
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it('should reject invalid newUserId UUID', () => {
-    const result = RotateMembershipSchema.safeParse({
-      ...validRotation,
-      newUserId: 'invalid',
-    });
+  it('should reject non-uuid entries', () => {
+    const result = LookupCrowdsRequestSchema.safeParse({ crowdUserIds: ['nope'] });
     expect(result.success).toBe(false);
   });
 });

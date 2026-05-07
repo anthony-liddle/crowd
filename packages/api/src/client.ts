@@ -5,6 +5,7 @@ import type {
   CreateCrowdDto,
   JoinCrowdDto,
   LeaveCrowdDto,
+  LookupCrowdsRequestDto,
   CreateProximityTokenDto,
   JoinWithTokenDto,
   LookupTokenDto,
@@ -112,15 +113,14 @@ class ApiClient {
       const parsed = Shared.CreateCrowdSchema.parse(data);
       return this.request<IdResponse>('/crowds', 'POST', parsed, 30000, Shared.IdResponseSchema);
     },
-    list: async (userId: string): Promise<CrowdResponse[]> => {
-      const queryParams = new URLSearchParams();
-      queryParams.append('userId', userId);
+    lookup: async (data: LookupCrowdsRequestDto): Promise<CrowdResponse[]> => {
+      const parsed = Shared.LookupCrowdsRequestSchema.parse(data);
       return this.request<CrowdResponse[]>(
-        `/crowds?${queryParams.toString()}`,
-        'GET',
-        undefined,
+        '/crowds/lookup',
+        'POST',
+        parsed,
         30000,
-        z.array(Shared.CrowdResponseSchema)
+        z.array(Shared.CrowdResponseSchema),
       );
     },
     join: async (crowdId: string, data: JoinCrowdDto): Promise<StatusResponse> => {

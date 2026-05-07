@@ -106,7 +106,7 @@ describe('Messages API', () => {
         const crowdResponse = await app.inject({
           method: 'POST',
           url: '/crowds',
-          payload: { name: 'Test Crowd', userId, isOpen: true },
+          payload: { name: 'Test Crowd', crowdUserId: userId, isOpen: true },
         });
         const crowdId = crowdResponse.json().id;
 
@@ -130,7 +130,7 @@ describe('Messages API', () => {
         const crowdResponse = await app.inject({
           method: 'POST',
           url: '/crowds',
-          payload: { name: 'Test Crowd', userId: ownerId, isOpen: true },
+          payload: { name: 'Test Crowd', crowdUserId: ownerId, isOpen: true },
         });
         const crowdId = crowdResponse.json().id;
 
@@ -416,7 +416,7 @@ describe('Messages API', () => {
       const crowdResponse = await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: { name: 'Test Crowd', userId, isOpen: true },
+        payload: { name: 'Test Crowd', crowdUserId: userId, isOpen: true },
       });
       const crowdId = crowdResponse.json().id;
 
@@ -451,7 +451,7 @@ describe('Messages API', () => {
       const crowdResponse = await app.inject({
         method: 'POST',
         url: '/crowds',
-        payload: { name: 'Test Crowd', userId, isOpen: true },
+        payload: { name: 'Test Crowd', crowdUserId: userId, isOpen: true },
       });
       const crowdId = crowdResponse.json().id;
 

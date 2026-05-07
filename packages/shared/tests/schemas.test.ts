@@ -6,7 +6,7 @@ import {
   CreateCrowdSchema,
   JoinCrowdSchema,
   LeaveCrowdSchema,
-  QueryCrowdsSchema,
+  LookupCrowdsRequestSchema,
 } from '../src/schemas';
 
 describe('Schemas', () => {
@@ -141,7 +141,7 @@ describe('Schemas', () => {
       const valid = {
         name: 'Test Crowd',
         isOpen: true,
-        userId: '123e4567-e89b-12d3-a456-426614174000',
+        crowdUserId: '123e4567-e89b-12d3-a456-426614174000',
       };
 
       expect(() => CreateCrowdSchema.parse(valid)).not.toThrow();
@@ -151,7 +151,7 @@ describe('Schemas', () => {
       const invalid = {
         name: '',
         isOpen: true,
-        userId: '123e4567-e89b-12d3-a456-426614174000',
+        crowdUserId: '123e4567-e89b-12d3-a456-426614174000',
       };
 
       expect(() => CreateCrowdSchema.parse(invalid)).toThrow();
@@ -161,7 +161,7 @@ describe('Schemas', () => {
       const invalid = {
         name: 'a'.repeat(51),
         isOpen: true,
-        userId: '123e4567-e89b-12d3-a456-426614174000',
+        crowdUserId: '123e4567-e89b-12d3-a456-426614174000',
       };
 
       expect(() => CreateCrowdSchema.parse(invalid)).toThrow();
@@ -170,7 +170,7 @@ describe('Schemas', () => {
     it('should default isOpen to true', () => {
       const valid = {
         name: 'Test Crowd',
-        userId: '123e4567-e89b-12d3-a456-426614174000',
+        crowdUserId: '123e4567-e89b-12d3-a456-426614174000',
       };
 
       const result = CreateCrowdSchema.parse(valid);
@@ -181,7 +181,7 @@ describe('Schemas', () => {
   describe('JoinCrowdSchema', () => {
     it('should validate valid join data', () => {
       const valid = {
-        userId: '123e4567-e89b-12d3-a456-426614174000',
+        crowdUserId: '123e4567-e89b-12d3-a456-426614174000',
       };
 
       expect(() => JoinCrowdSchema.parse(valid)).not.toThrow();
@@ -191,20 +191,26 @@ describe('Schemas', () => {
   describe('LeaveCrowdSchema', () => {
     it('should validate valid leave data', () => {
       const valid = {
-        userId: '123e4567-e89b-12d3-a456-426614174000',
+        crowdUserId: '123e4567-e89b-12d3-a456-426614174000',
       };
 
       expect(() => LeaveCrowdSchema.parse(valid)).not.toThrow();
     });
   });
 
-  describe('QueryCrowdsSchema', () => {
-    it('should validate valid query', () => {
+  describe('LookupCrowdsRequestSchema', () => {
+    it('should validate a non-empty list of crowdUserIds', () => {
       const valid = {
-        userId: '123e4567-e89b-12d3-a456-426614174000',
+        crowdUserIds: ['123e4567-e89b-12d3-a456-426614174000'],
       };
 
-      expect(() => QueryCrowdsSchema.parse(valid)).not.toThrow();
+      expect(() => LookupCrowdsRequestSchema.parse(valid)).not.toThrow();
+    });
+
+    it('should reject an empty list', () => {
+      expect(() =>
+        LookupCrowdsRequestSchema.parse({ crowdUserIds: [] }),
+      ).toThrow();
     });
   });
 });

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
-  getOrGenerateUserId,
-  refreshUserId,
+  getOrGenerateGlobalUserId,
+  refreshGlobalUserId,
   getOrGenerateCrowdUserId,
+  storeCrowdUserId,
   deleteCrowdUserId,
   getAllCrowdUserIds,
 } from '../../src/utils/identity';
@@ -22,9 +23,9 @@ describe('identity utils', () => {
     vi.clearAllMocks();
   });
 
-  describe('getOrGenerateUserId', () => {
+  describe('getOrGenerateGlobalUserId', () => {
     it('generates new UUID when none exists', () => {
-      const userId = getOrGenerateUserId();
+      const userId = getOrGenerateGlobalUserId();
 
       expect(userId).toBeDefined();
       expect(localStorage.setItem).toHaveBeenCalled();
@@ -34,22 +35,30 @@ describe('identity utils', () => {
       const existingId = 'existing-user-id';
       localStorage.setItem('crowd_user_id', existingId);
 
-      const userId = getOrGenerateUserId();
+      const userId = getOrGenerateGlobalUserId();
 
       expect(userId).toBe(existingId);
     });
   });
 
-  describe('refreshUserId', () => {
+  describe('refreshGlobalUserId', () => {
     it('generates new UUID and stores it', () => {
       const existingId = 'old-id';
       localStorage.setItem('crowd_user_id', existingId);
 
-      const newId = refreshUserId();
+      const newId = refreshGlobalUserId();
 
       expect(newId).toBeDefined();
       expect(newId).not.toBe(existingId);
       expect(localStorage.setItem).toHaveBeenCalled();
+    });
+  });
+
+  describe('storeCrowdUserId', () => {
+    it('persists a pre-generated id under the given crowdId', () => {
+      storeCrowdUserId('crowd-A', 'pre-gen-A');
+      const stored = localStorage.getItem('crowd_user_ids');
+      expect(stored && JSON.parse(stored)).toEqual({ 'crowd-A': 'pre-gen-A' });
     });
   });
 

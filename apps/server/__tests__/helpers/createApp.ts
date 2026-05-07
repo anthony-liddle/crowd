@@ -8,7 +8,7 @@ import {
   CreateCrowdSchema,
   JoinCrowdSchema,
   LeaveCrowdSchema,
-  QueryCrowdsSchema,
+  LookupCrowdsRequestSchema,
   CreateProximityTokenSchema,
   JoinWithTokenSchema,
   LookupTokenSchema,
@@ -16,7 +16,7 @@ import {
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { messages, messageBoosts, crowds, crowdMemberships, proximityTokens } from '../../src/db/schema';
-import { sql, asc, gt, and, eq, count, isNull } from 'drizzle-orm';
+import { sql, asc, gt, and, eq, or, inArray, count, isNull } from 'drizzle-orm';
 
 const CROWD_DURATION_MS = 24 * 60 * 60 * 1000;
 const PROXIMITY_TOKEN_TTL_MS = 5 * 60 * 1000;
@@ -46,7 +46,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
 
       const [newCrowd] = await db.insert(crowds).values({
         name: body.name,
-        ownerId: body.userId,
+        ownerId: body.crowdUserId,
         isOpen: body.isOpen,
         createdAt: created,
         expiresAt: expires,
@@ -54,7 +54,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
 
       await db.insert(crowdMemberships).values({
         crowdId: newCrowd.id,
-        userId: body.userId,
+        userId: body.crowdUserId,
       });
 
       return { id: newCrowd.id };
@@ -64,44 +64,52 @@ export function createTestApp(connectionString: string): FastifyInstance {
     }
   });
 
-  // Get crowds
-  server.get('/crowds', async (request, reply) => {
+  // Lookup crowds
+  server.post('/crowds/lookup', async (request, reply) => {
     try {
-      const query = QueryCrowdsSchema.parse(request.query);
-      const userId = query.userId;
+      const body = LookupCrowdsRequestSchema.parse(request.body);
+      const ids = body.crowdUserIds;
+      const idSet = new Set(ids);
 
-      const userCrowdsWithCounts = await db
-        .select({
+      const matched = await db
+        .selectDistinct({
           id: crowds.id,
           name: crowds.name,
           isOpen: crowds.isOpen,
           ownerId: crowds.ownerId,
           createdAt: crowds.createdAt,
           expiresAt: crowds.expiresAt,
-          memberCount: count(crowdMemberships.id),
         })
         .from(crowds)
-        .innerJoin(crowdMemberships, eq(crowds.id, crowdMemberships.crowdId))
+        .leftJoin(crowdMemberships, eq(crowds.id, crowdMemberships.crowdId))
         .where(and(
           gt(crowds.expiresAt, new Date()),
-          sql`EXISTS (
-            SELECT 1 FROM ${crowdMemberships} cm
-            WHERE cm.crowd_id = ${crowds.id}
-            AND cm.user_id = ${userId}
-          )`
-        ))
-        .groupBy(crowds.id);
+          or(
+            inArray(crowds.ownerId, ids),
+            inArray(crowdMemberships.userId, ids),
+          ),
+        ));
 
-      return userCrowdsWithCounts.map(crowd => ({
-        id: crowd.id,
-        name: crowd.name,
-        isOpen: crowd.isOpen,
-        isOwner: crowd.ownerId === userId,
-        memberCount: Number(crowd.memberCount) || 0,
-        createdAt: crowd.createdAt,
-        expiresAt: crowd.expiresAt,
-        canInvite: crowd.isOpen || crowd.ownerId === userId,
+      const result = await Promise.all(matched.map(async (crowd) => {
+        const [memberCountResult] = await db
+          .select({ count: count() })
+          .from(crowdMemberships)
+          .where(eq(crowdMemberships.crowdId, crowd.id));
+
+        const isOwner = idSet.has(crowd.ownerId);
+        return {
+          id: crowd.id,
+          name: crowd.name,
+          isOpen: crowd.isOpen,
+          isOwner,
+          memberCount: memberCountResult?.count || 0,
+          createdAt: crowd.createdAt,
+          expiresAt: crowd.expiresAt,
+          canInvite: crowd.isOpen || isOwner,
+        };
       }));
+
+      return result;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });
@@ -128,10 +136,9 @@ export function createTestApp(connectionString: string): FastifyInstance {
       try {
         await db.insert(crowdMemberships).values({
           crowdId,
-          userId: body.userId,
+          userId: body.crowdUserId,
         });
       } catch (insertErr: unknown) {
-        // Check for unique constraint violation (PostgreSQL error code 23505)
         if (insertErr instanceof Error &&
             (insertErr.message.includes('unique_crowd_membership') ||
              (insertErr as any).code === '23505')) {
@@ -157,7 +164,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
       if (crowd.expiresAt < new Date()) {
         return reply.status(400).send({ error: 'Crowd expired' });
       }
-      if (crowd.ownerId !== body.userId) {
+      if (crowd.ownerId !== body.crowdUserId) {
         return reply.status(403).send({ error: 'Only the owner can generate join codes' });
       }
 
@@ -239,12 +246,12 @@ export function createTestApp(connectionString: string): FastifyInstance {
 
       const [existing] = await db.select().from(crowdMemberships).where(and(
         eq(crowdMemberships.crowdId, tokenRow.crowdId),
-        eq(crowdMemberships.userId, body.userId),
+        eq(crowdMemberships.userId, body.crowdUserId),
       ));
       if (!existing) {
         await db.insert(crowdMemberships).values({
           crowdId: tokenRow.crowdId,
-          userId: body.userId,
+          userId: body.crowdUserId,
         });
       }
 
@@ -281,7 +288,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
 
       await db.delete(crowdMemberships).where(and(
         eq(crowdMemberships.crowdId, crowdId),
-        eq(crowdMemberships.userId, body.userId)
+        eq(crowdMemberships.userId, body.crowdUserId),
       ));
 
       return { status: 'ok' };

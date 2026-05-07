@@ -2,7 +2,7 @@ import { useState, useEffect, Component, type ReactNode } from 'react';
 import { CreateMessage } from './components/CreateMessage';
 import { Feed } from './components/Feed';
 import { Crowds } from './components/Crowds';
-import { getOrGenerateUserId, refreshUserId } from './utils/identity';
+import { getOrGenerateGlobalUserId, refreshGlobalUserId } from './utils/identity';
 import { User, RefreshCw, Terminal, MessageSquare, Users, AlertTriangle } from 'lucide-react';
 
 type Tab = 'messages' | 'crowds';
@@ -65,12 +65,12 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>('messages');
 
   useEffect(() => {
-    setUserId(getOrGenerateUserId());
+    setUserId(getOrGenerateGlobalUserId());
   }, []);
 
   const handleRefreshIdentity = () => {
     if (confirm('Are you sure? This will reset your identity for posting.')) {
-      const newId = refreshUserId();
+      const newId = refreshGlobalUserId();
       setUserId(newId);
     }
   };
