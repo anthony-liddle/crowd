@@ -134,8 +134,8 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
   };
 
   const handleScanResult = (raw: string) => {
-    setScanVisible(false);
     const invite = parseCrowdInvite(raw);
+    setScanVisible(false);
     if (!invite) {
       Toast.show({
         type: 'error',
@@ -144,30 +144,37 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
       });
       return;
     }
-    if (invite.kind === 'token') {
-      startTokenLookup(invite);
-    } else {
-      // Open-crowd QR — no preview needed; same code path as paste.
-      (async () => {
-        setJoining(true);
-        try {
-          await joinCrowd(invite.crowdId);
-          Toast.show({ type: 'success', text1: 'Joined', text2: 'You have joined the crowd.' });
-          reset();
-          onJoined();
-          onClose();
-        } catch (error: any) {
-          Toast.show({
-            type: 'error',
-            text1: 'Error',
-            text2: error?.message?.includes('Already')
-              ? 'You are already a member.'
-              : 'Failed to join crowd.',
-          });
-        } finally {
-          setJoining(false);
-        }
-      })();
+    // Defer the follow-up until the scanner Modal has fully dismissed.
+    // iOS drops a transparent Modal that's presented while a fullScreen
+    // Modal is still mid-dismissal, leaving the screen frozen with no
+    // confirmation surfaced. 350ms covers the slide-down animation.
+    setTimeout(() => {
+      if (invite.kind === 'token') {
+        startTokenLookup(invite);
+      } else {
+        joinOpenCrowdById(invite.crowdId);
+      }
+    }, 350);
+  };
+
+  const joinOpenCrowdById = async (crowdId: string) => {
+    setJoining(true);
+    try {
+      await joinCrowd(crowdId);
+      Toast.show({ type: 'success', text1: 'Joined', text2: 'You have joined the crowd.' });
+      reset();
+      onJoined();
+      onClose();
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error?.message?.includes('Already')
+          ? 'You are already a member.'
+          : 'Failed to join crowd.',
+      });
+    } finally {
+      setJoining(false);
     }
   };
 
