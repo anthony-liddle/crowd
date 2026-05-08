@@ -66,9 +66,9 @@ export const DesignTestScreen: React.FC = () => {
 
         <Section label="Buttons">
           <View style={{ gap: 10 }}>
-            <PrimaryButton label="Post the first thing" onPress={() => {}} />
-            <QuietButton label="Join with a code" onPress={() => {}} />
-            <InlineButton label="Inline action" onPress={() => {}} />
+            <PrimaryButton label="Post the first thing" onPress={() => { }} />
+            <QuietButton label="Join a crowd" onPress={() => { }} />
+            <InlineButton label="Inline action" onPress={() => { }} />
           </View>
         </Section>
 

@@ -117,7 +117,7 @@ export const CrowdsScreen: React.FC = () => {
           <PrimaryButton label="Start a crowd" onPress={() => setCreateModalVisible(true)} />
         </View>
         <View className="flex-1">
-          <QuietButton label="Join with a code" onPress={() => setJoinModalVisible(true)} />
+          <QuietButton label="Join a crowd" onPress={() => setJoinModalVisible(true)} />
         </View>
       </View>
 
