@@ -19,7 +19,7 @@ export function PrimaryButton({ label, ...props }: ButtonProps) {
   );
 }
 
-// Quiet: outlined, transparent. Secondary actions like "Join with a code".
+// Quiet: outlined, transparent. Secondary actions like "Join a crowd".
 export function QuietButton({ label, ...props }: ButtonProps) {
   return (
     <Pressable
