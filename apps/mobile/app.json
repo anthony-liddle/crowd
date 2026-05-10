@@ -3,6 +3,7 @@
     "name": "Crowd",
     "slug": "crowd-app",
     "version": "1.0.0",
+    "scheme": "crowd",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",

@@ -7,7 +7,10 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 export type RootTabParamList = {
   Feed: undefined;
   Post: undefined;
-  Crowds: undefined;
+  // pendingInvite is the raw URL string from a `crowd://` deep link, parsed
+  // inside CrowdsScreen via parseCrowdInvite so QR/paste/deep-link share one
+  // parser. Cleared after consumption.
+  Crowds: { pendingInvite?: string } | undefined;
 };
 
 /**

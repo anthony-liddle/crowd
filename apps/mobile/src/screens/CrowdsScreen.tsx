@@ -1,8 +1,14 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, SectionList, RefreshControl, Alert, Text } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  RouteProp,
+} from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
-import { Crowd } from '@/types';
+import { Crowd, RootTabParamList, TabNavigationProp } from '@/types';
+import { parseCrowdInvite, CrowdInvite } from '@/utils/crowdInvite';
 import { getMyCrowds, leaveCrowd } from '@/services/api';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { CrowdCard } from '@/components/CrowdCard';
@@ -45,6 +51,36 @@ export const CrowdsScreen: React.FC = () => {
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [joinModalVisible, setJoinModalVisible] = useState(false);
+  const [deepLinkInvite, setDeepLinkInvite] = useState<CrowdInvite | null>(null);
+
+  const navigation = useNavigation<TabNavigationProp>();
+  const route = useRoute<RouteProp<RootTabParamList, 'Crowds'>>();
+  const pendingInvite = route.params?.pendingInvite;
+
+  // Deep-link entry. We don't gate on whether the user is mid-flow on another
+  // screen: the only screen with unsaved input is CreateMessageScreen, and
+  // adding a confirmation step there is friction for a hypothetical case
+  // (real users tapping a crowd:// link mid-compose is rare). Revisit if a
+  // tester reports lost drafts. CreateCrowdModal lives on this screen and is
+  // dismissed below before opening the join Modal — iOS won't reliably stack
+  // two transparent Modals (see PR #69/#70).
+  useEffect(() => {
+    if (!pendingInvite) return;
+    const parsed = parseCrowdInvite(pendingInvite);
+    // Always clear the param so re-focusing the tab doesn't re-trigger.
+    navigation.setParams({ pendingInvite: undefined });
+    if (!parsed) {
+      Toast.show({
+        type: 'error',
+        text1: 'Not a Crowd invite link',
+        text2: "That link doesn't look like a Crowd invite.",
+      });
+      return;
+    }
+    if (createModalVisible) setCreateModalVisible(false);
+    setDeepLinkInvite(parsed);
+    setJoinModalVisible(true);
+  }, [pendingInvite, navigation, createModalVisible]);
 
   const loadCrowds = useCallback(async () => {
     try {
@@ -154,8 +190,12 @@ export const CrowdsScreen: React.FC = () => {
       />
       <JoinCrowdModal
         visible={joinModalVisible}
-        onClose={() => setJoinModalVisible(false)}
+        onClose={() => {
+          setJoinModalVisible(false);
+          setDeepLinkInvite(null);
+        }}
         onJoined={loadCrowds}
+        initialInvite={deepLinkInvite}
       />
     </View>
   );
