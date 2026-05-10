@@ -47,16 +47,8 @@ web-build/
 *.orig.*
 
 # Mobile Build
-# macOS
-apps/mobile/ios/*.xcodeproj/project.xcworkspace
-apps/mobile/ios/*.xcodeproj/xcuserdata
-apps/mobile/ios/Pods/
-apps/mobile/ios/build/
-
-# Android
-apps/mobile/android/app/build/
-apps/mobile/android/.gradle/
-apps/mobile/android/local.properties
+apps/mobile/ios/
+apps/mobile/android/
 
 # Server specific
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -23,6 +23,10 @@ interface JoinCrowdModalProps {
   visible: boolean;
   onClose: () => void;
   onJoined: () => void;
+  // Pre-parsed invite supplied by the caller (deep-link entry path). When
+  // provided alongside `visible`, the Modal skips the IdleSheet and starts
+  // directly in the lookup/join flow that the QR scanner would have triggered.
+  initialInvite?: CrowdInvite | null;
 }
 
 const COLORS = {
@@ -49,6 +53,7 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
   visible,
   onClose,
   onJoined,
+  initialInvite,
 }) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -147,6 +152,30 @@ export const JoinCrowdModal: React.FC<JoinCrowdModalProps> = ({
       joinOpen(invite?.kind === 'open' ? invite.crowdId : trimmed);
     }
   };
+
+  // Deep-link entry: when the parent supplies an already-parsed invite while
+  // the Modal is visible, kick the flow straight to looking-up + the matching
+  // API call — same destination QR scans reach via handleScan, just bypassing
+  // the scanner step. The ref dedupes against re-renders so the lookup fires
+  // exactly once per (visible, invite) pair. Identity comparison on the prop
+  // is intentional: callers should pass a stable object per deep link arrival.
+  const consumedInviteRef = useRef<CrowdInvite | null>(null);
+  useEffect(() => {
+    if (!visible) {
+      consumedInviteRef.current = null;
+      return;
+    }
+    if (!initialInvite || consumedInviteRef.current === initialInvite) return;
+    consumedInviteRef.current = initialInvite;
+    if (initialInvite.kind === 'token') {
+      lookupAndConfirm(initialInvite);
+    } else {
+      joinOpen(initialInvite.crowdId);
+    }
+    // lookupAndConfirm/joinOpen are stable references created on each render
+    // but only the (visible, initialInvite) edge matters for triggering.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, initialInvite]);
 
   const handleScan = (raw: string) => {
     const invite = parseCrowdInvite(raw);
