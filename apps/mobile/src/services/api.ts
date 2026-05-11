@@ -1,5 +1,4 @@
 import { api } from '@repo/api';
-import Constants from 'expo-constants';
 import { v4 as uuidv4 } from 'uuid';
 import 'react-native-get-random-values';
 import {
@@ -19,20 +18,18 @@ import {
 } from '@/utils/identity';
 import { addMyMessage, addBoostedMessage } from '@/utils/storage';
 
-// API base URL configuration
-// Priority: EXPO_PUBLIC_API_URL env var > dynamic localhost detection
-// For production backend, set EXPO_PUBLIC_API_URL in .env file
-// For local development, leave EXPO_PUBLIC_API_URL unset to use localhost
-
-const getBaseUrl = (): string => {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
-  const origin = Constants.expoConfig?.hostUri?.split(':')[0];
-  return origin ? `http://${origin}:8080` : 'http://localhost:8080';
-};
-
-const baseUrl = getBaseUrl();
+// API base URL is build-time baked from EXPO_PUBLIC_API_URL. Missing or
+// protocol-less values throw at module load rather than silently falling back
+// to localhost (which is the phone itself, and produces a flood of opaque
+// "Network request failed" errors).
+const baseUrl = process.env.EXPO_PUBLIC_API_URL;
+if (!baseUrl || !baseUrl.startsWith('http')) {
+  throw new Error(
+    'EXPO_PUBLIC_API_URL is not set or is missing a protocol. Set it in apps/mobile/.env ' +
+      '(e.g. https://crowd-dev.fly.dev for the dev backend, or http://<your-mac-LAN-IP>:8080 ' +
+      'for a local server) and rebuild — EXPO_PUBLIC_* values are baked in at build time.',
+  );
+}
 
 api.setBaseUrl(baseUrl);
 console.log('API Base URL set to:', baseUrl);
