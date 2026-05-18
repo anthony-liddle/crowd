@@ -1,10 +1,10 @@
 # Crowd Server
 
-The backend service for the Crowd application, built with **Fastify**, **TypeScript**, **Drizzle ORM**, and **PostgreSQL** (PostGIS).
+The backend service for the Crowd application, built with **Fastify**, **TypeScript**, **Drizzle ORM**, and **PostgreSQL**.
 
 ## Features
 
-- **Geolocation**: Stores and queries messages using PostGIS for efficient spatial queries.
+- **Geolocation**: Stores latitude/longitude and computes distance using Haversine in SQL. (PostGIS is filed as a future change once message volume justifies a spatial index.)
 - **REST API**: Provides endpoints for mobile clients and devtools.
 - **Anonymous Identity**: Handles user interactions without persistent authentication.
 - **Crowds**: Manages time-limited groups (24h) and memberships.
@@ -13,7 +13,7 @@ The backend service for the Crowd application, built with **Fastify**, **TypeScr
 ## Tech Stack
 
 - **Framework**: Fastify
-- **Database**: PostgreSQL + PostGIS
+- **Database**: PostgreSQL
 - **ORM**: Drizzle ORM
 - **Validation**: Zod
 - **Language**: TypeScript
@@ -24,6 +24,7 @@ The backend service for the Crowd application, built with **Fastify**, **TypeScr
 - `message_boosts`: Tracks boosts to prevent multiple boosts by same user.
 - `crowds`: Stores group metadata (name, owner, expiration).
 - `crowd_memberships`: Links users to crowds.
+- `proximity_tokens`: Single-use tokens for private-crowd proximity-based joining. Generated when a crowd owner taps Invite on a private crowd; consumed when another user scans the QR code containing the token. Expire after 5 minutes; consuming sets `used_at` and marks the token as no longer valid. Columns: `id` (uuid PK), `crowd_id` (uuid FK → crowds, cascade delete), `token` (text, unique), `created_at` (timestamp), `expires_at` (timestamp), `used_at` (timestamp, nullable).
 
 ## API Endpoints
 

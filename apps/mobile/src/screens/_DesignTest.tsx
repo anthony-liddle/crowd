@@ -1,3 +1,15 @@
+/**
+ * Ember design system component gallery.
+ *
+ * Unrouted by design — not part of the production navigation tree. Renders
+ * key Ember primitives (Concentric, Ring, ReachPreview, buttons, RelayControl,
+ * RelaySheet) at representative states for reference during development.
+ *
+ * To exercise: temporarily add to TabNavigator, or import directly in a screen
+ * during development.
+ *
+ * See docs/design-system.md for the system this gallery represents.
+ */
 import React, { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { Ring } from '@/components/Ring';

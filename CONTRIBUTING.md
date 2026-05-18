@@ -5,7 +5,7 @@ Thank you for your interest in contributing to Crowd! This document provides gui
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/yourusername/crowd.git`
+2. Clone your fork: `git clone https://github.com/anthony-liddle/crowd.git`
 3. Install dependencies: `pnpm install`
 4. Start the local stack (Postgres + server in containers): `pnpm dev:up`
 5. Seed dev data: `pnpm dev:seed`
