@@ -34,9 +34,10 @@ if (!baseUrl || !baseUrl.startsWith('http')) {
 api.setBaseUrl(baseUrl);
 console.log('API Base URL set to:', baseUrl);
 
-// TODO: Get actual user location. Hardcoded to Aloha, OR (matches the seed
-// script's CENTER in apps/server/src/scripts/seed.ts) so the simulator's
-// default feed surfaces seeded messages.
+// DEFAULT_LOCATION is a fallback constant retained for early-development paths
+// that called the API without a location. Production code paths now always
+// pass a fresh location via getFreshLocation(). The constant could likely be
+// removed; verify no caller relies on the fallback before deleting.
 const DEFAULT_LOCATION = {
   latitude: 45.46948,
   longitude: -122.863,

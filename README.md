@@ -30,62 +30,43 @@ cd crowd
 pnpm install
 ```
 
-3. Set up environment variables:
+3. Set up environment variables.
+
+Each app has its own `.env.example` next to it (`apps/server/.env.example`, `apps/mobile/.env.example`, `apps/devtools/.env.example`). The defaults match the docker-compose stack, so for the server and devtools you typically don't need to copy them.
+
+The mobile app is the exception — `apps/mobile/.env` is required. The app throws at startup if `EXPO_PUBLIC_API_URL` is unset or has no protocol:
 
 ```bash
-# Copy the example env file (optional, as defaults match docker-compose.yml)
-cp .env.example .env
-# Edit .env if you need different database credentials or server configuration
+cp apps/mobile/.env.example apps/mobile/.env
+# Defaults to https://crowd-dev.fly.dev (the deployed dev backend).
+# If you want a fully-local stack instead, set it to http://<your-mac-LAN-IP>:8080
+# — phones can't reach `localhost` on your dev machine. EXPO_PUBLIC_* values are
+# baked in at build time, so changing this requires a rebuild.
 ```
 
-The application will use these environment variables:
-- `DATABASE_URL`: PostgreSQL connection string (default: `postgres://postgres:postgres@localhost:5432/monorepo_db`)
-- `PORT`: Server port (default: `8080`)
-- `HOST`: Server host (default: `0.0.0.0`)
-- `CORS_ORIGIN`: CORS origin setting (default: `*` for development)
-
-4. Start the PostgreSQL database:
+4. Bring up the local stack (Postgres + server in Docker):
 
 ```bash
-docker-compose up -d
+pnpm dev:up
 ```
 
-5. Run database migrations:
+This starts Postgres and the Fastify server in containers. The server runs `tsx watch` for hot reload and applies migrations on startup — no separate migration step needed.
+
+5. Seed dev data (optional, but recommended for a working feed):
 
 ```bash
-pnpm --filter @app/server migrate
+pnpm dev:seed
 ```
+
+This populates 4 crowds, 12 messages, and 7 boosts, centered on Aloha, OR — which matches the mobile app's `DEFAULT_LOCATION`. **Set your iOS Simulator location to `45.46948, -122.863`** (Features → Location → Custom Location) or the seeded feed will appear empty.
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md#local-development) for the full set of `dev:*` commands (`dev:down`, `dev:logs`, `dev:reset`) and for the host-only server option.
 
 ## Running the Project
 
-### Run All (Recommended)
-
-To run both the server and mobile application simultaneously:
+Once `pnpm dev:up` is running, the server is live at http://localhost:8080. To start the mobile app:
 
 ```bash
-pnpm dev
-```
-
-This uses the `concurrently` package to stream output from both the server and mobile app.
-
-### Run Individually
-
-**Server:**
-
-```bash
-pnpm dev:server
-# OR
-pnpm --filter @app/server dev
-```
-
-The server runs on Fastify with Drizzle ORM.
-- **API**: http://localhost:8080 (default Fastify port usually, check src/index.ts)
-
-**Mobile:**
-
-```bash
-pnpm dev:mobile
-# OR
 pnpm --filter @app/mobile start
 ```
 
@@ -96,11 +77,9 @@ The mobile app is an Expo project.
 
 ### Run DevTools
 
-Typically used for debugging location-based features and seeding data.
+Typically used for debugging location-based features.
 
 ```bash
-pnpm dev:tools
-# OR
 pnpm --filter @app/devtools dev
 ```
 
@@ -120,7 +99,7 @@ crowd/
 └── docker-compose.yml  # PostgreSQL database
 ```
 
-See `apps/mobile/PROJECT_STRUCTURE.md` and `apps/mobile/README.md` for detailed mobile app documentation.
+See `apps/mobile/README.md` for detailed mobile app documentation.
 
 ## Features
 
