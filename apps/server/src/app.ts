@@ -1,6 +1,7 @@
 import fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { randomBytes } from 'crypto';
+import { ZodError } from 'zod';
 import {
   PostMessageSchema,
   QueryFeedSchema,
@@ -51,6 +52,25 @@ export function buildApp(): FastifyInstance {
     origin: corsOrigin,
   });
 
+  // Global error handler. Zod validation failures are client errors; they
+  // return 400 with the issues serialized. Everything else is treated as a
+  // server error and returns 500 with the existing response shape. Logging
+  // level is set per branch so validation noise doesn't flood error logs.
+  server.setErrorHandler((error, request, reply) => {
+    if (error instanceof ZodError) {
+      request.log.info({ issues: error.issues }, 'Validation failed');
+      return reply.status(400).send({
+        error: 'ValidationError',
+        issues: error.issues,
+      });
+    }
+    request.log.error({ error }, 'Request failed');
+    return reply.status(500).send({
+      error: 'Internal Server Error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  });
+
   server.get('/health', async (_request, reply) => {
     try {
       await db.execute(sql`SELECT 1`);
@@ -94,6 +114,7 @@ export function buildApp(): FastifyInstance {
 
       return { id: newCrowd.id };
     } catch (err: any) {
+      if (err instanceof ZodError) throw err;
       request.log.error({ msg: 'Create Crowd Failed', error: err });
       return reply.status(500).send({
         error: 'Internal Server Error',
@@ -153,6 +174,7 @@ export function buildApp(): FastifyInstance {
 
       return result;
     } catch (err: any) {
+      if (err instanceof ZodError) throw err;
       request.log.error({ msg: 'Lookup Crowds Failed', error: err });
       return reply.status(500).send({
         error: 'Internal Server Error',
@@ -194,6 +216,7 @@ export function buildApp(): FastifyInstance {
 
       return { status: 'ok' };
     } catch (err: any) {
+      if (err instanceof ZodError) throw err;
       request.log.error({ msg: 'Join Crowd Failed', error: err });
       return reply.status(500).send({
         error: 'Internal Server Error',
@@ -234,6 +257,7 @@ export function buildApp(): FastifyInstance {
 
       return { token, expiresAt };
     } catch (err: any) {
+      if (err instanceof ZodError) throw err;
       request.log.error({ msg: 'Create Proximity Token Failed', error: err });
       return reply.status(500).send({
         error: 'Internal Server Error',
@@ -283,6 +307,7 @@ export function buildApp(): FastifyInstance {
         },
       };
     } catch (err: any) {
+      if (err instanceof ZodError) throw err;
       request.log.error({ msg: 'Lookup Token Failed', error: err });
       return reply.status(500).send({
         error: 'Internal Server Error',
@@ -348,6 +373,7 @@ export function buildApp(): FastifyInstance {
         },
       };
     } catch (err: any) {
+      if (err instanceof ZodError) throw err;
       request.log.error({ msg: 'Join With Token Failed', error: err });
       return reply.status(500).send({
         error: 'Internal Server Error',
@@ -372,6 +398,7 @@ export function buildApp(): FastifyInstance {
 
       return { status: 'ok' };
     } catch (err: any) {
+      if (err instanceof ZodError) throw err;
       request.log.error({ msg: 'Leave Crowd Failed', error: err });
       return reply.status(500).send({
         error: 'Internal Server Error',
@@ -423,6 +450,7 @@ export function buildApp(): FastifyInstance {
 
       return { id: newMessage.id };
     } catch (err: any) {
+      if (err instanceof ZodError) throw err;
       request.log.error({
         msg: 'Create Message Failed',
         error: err,
@@ -490,6 +518,7 @@ export function buildApp(): FastifyInstance {
 
       return { status: 'ok' };
     } catch (err: any) {
+      if (err instanceof ZodError) throw err;
       request.log.error({
         msg: 'Boost Message Failed',
         error: err,
@@ -619,6 +648,7 @@ export function buildApp(): FastifyInstance {
         crowdId: msg.crowdId || undefined,
       }));
     } catch (err: any) {
+      if (err instanceof ZodError) throw err;
       request.log.error({
         msg: 'Feed Query Failed',
         error: err,

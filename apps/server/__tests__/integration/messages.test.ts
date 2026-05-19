@@ -45,7 +45,7 @@ describe('Messages API', () => {
         payload: message,
       });
 
-      expect(response.statusCode).toBe(500); // Zod validation error
+      expect(response.statusCode).toBe(400); // Zod validation error
     });
 
     it('should reject invalid coordinates - latitude out of range', async () => {
@@ -56,7 +56,7 @@ describe('Messages API', () => {
         payload: message,
       });
 
-      expect(response.statusCode).toBe(500);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should reject invalid coordinates - longitude out of range', async () => {
@@ -67,7 +67,7 @@ describe('Messages API', () => {
         payload: message,
       });
 
-      expect(response.statusCode).toBe(500);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should set correct expiresAt based on activeMinutes', async () => {
