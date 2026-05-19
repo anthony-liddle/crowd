@@ -4,7 +4,7 @@ The working backlog of what's pending. Lean by design — when items ship, they 
 
 For working principles, historical decisions, and lessons from completed work, see `docs/decisions.md`.
 
-Last updated: late-May 2026 (post-preflight cleanup).
+Last updated: late-May 2026 (post-schemas-dedup).
 
 ---
 
@@ -13,6 +13,27 @@ Last updated: late-May 2026 (post-preflight cleanup).
 - **Crowds list controls (sort/filter):** **defer until testing shows a real need.** Watch tester feedback for "I have too many crowds" or "I can't find [name]" before designing the controls.
 
 ---
+
+## Wider TestFlight readiness
+
+Internal TestFlight has been painful for adding testers. Moving to external testing (up to 10,000 users) requires Apple's Beta App Review on the operational side, plus a small set of followups items that meaningfully affect first-impression quality. Listed here as a filtered view of the items below.
+
+**Genuine blockers (would be operationally bad to ship wider without):**
+
+- Cleanup script for production — see Deploy and CI. Without automated cleanup, the dev DB grows until it hits Neon's free-tier ceiling. Worse with more users posting.
+- Server validation of post coordinates — see Server-side defense in depth. Currently trusts client-supplied lat/lng. Internal testers are trusted; wider testers aren't. Even rate-limiting per user would meaningfully change the threat model.
+
+**Strong-soft blockers (would meaningfully reduce first-impression quality):**
+
+- Onboarding / first-launch identity rotation UX — see Deferred design surfaces. Internal testers can have the privacy model explained; wider testers can't.
+- Field-level error rendering for server validation errors — see Mobile-specific. More testers surface more edge cases; generic toasts won't scale.
+- Deploy notifications — see Deploy and CI. With more testers, a broken deploy gets discovered by an apologetic Slack message rather than by you noticing.
+
+**Not a code item but on the same track:**
+
+- Apple Beta App Review for TestFlight external testing. Operational work (app metadata, screenshots, beta description, content warnings, export compliance). Can run in parallel with the code items above; typically a few days to a week of Apple review time after submission.
+
+When all of the above are addressed (or you decide they don't apply), the path to wider TestFlight is open. Everything else in this doc is either polish, longer-horizon work, or pending tester feedback.
 
 ## Deferred design surfaces (from the Ember migration)
 
@@ -32,7 +53,6 @@ These were intentionally out of scope for the design migration but will need att
 Background: `docs/decisions.md` → Identity model rearchitecture.
 
 - **Eight orphaned crowds in the production dev DB from Round 2 testing.** Memberships keyed by mainUserId from before Round 4. Will self-clean within 24h via expiration; no action needed.
-- **Two shared-schema test files** (`packages/shared/__tests__/schemas.test.ts` and `packages/shared/tests/schemas.test.ts`) — overlapping coverage, likely a leftover from a directory rename. Updated both consistently in Round 4. Worth deduping in a separate small PR.
 
 ---
 

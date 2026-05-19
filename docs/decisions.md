@@ -6,7 +6,7 @@ This document is the historical companion to `docs/followups.md`. The followups 
 
 When something ships and the doing-it is no longer the work, the record of it moves here. The working backlog stays lean.
 
-Last entry added: late-May 2026 (preflight checks)
+Last entry added: late-May 2026 (shared-schema test dedup)
 
 ---
 
@@ -190,7 +190,7 @@ Validation errors on the server returned 500 Internal Server Error for any handl
 
 Fix: added a global `setErrorHandler` in `buildApp()` that distinguishes `ZodError` from other thrown errors, returning 400 with `{ error: 'ValidationError', issues: [...] }` for the former and preserving the existing 500 shape for everything else. Each of the 10 catches gained a single `if (err instanceof ZodError) throw err;` line at the top to let validation errors propagate to the global handler while preserving the existing per-handler logging for real server errors. Five tests asserting the old 500 behavior were updated to assert 400.
 
-**Load-bearing lesson surfaced: the `createApp.ts` test-helper drift is a real correctness hazard, not a polish item.** The production fix initially looked complete, but tests still saw 500s because they were exercising `apps/server/__tests__/helpers/createApp.ts` — a hand-mirrored copy of the production routes — rather than the production app. The same edit had to be applied twice. The followups doc had filed `createApp.ts` drift months earlier; this incident is the first one where the drift caused a visible problem rather than just being aesthetically unsatisfying. The structural fix (have integration tests instantiate the real `buildApp()`) remains on the active backlog under `### Testing infrastructure` and now has concrete evidence behind it.
+**Load-bearing lesson surfaced: the `createApp.ts` test-helper drift is a real correctness hazard, not a polish item.** The production fix initially looked complete, but tests still saw 500s because they were exercising `apps/server/__tests__/helpers/createApp.ts` — a hand-mirrored copy of the production routes — rather than the production app. The same edit had to be applied twice. The followups doc had filed `createApp.ts` drift months earlier; this incident is the first one where the drift caused a visible problem rather than just being aesthetically unsatisfying. A second instance of the same shape surfaced shortly after with the shared-schema test dedup — see the entry below. The structural fix (have integration tests instantiate the real `buildApp()`) remains on the active backlog under `### Testing infrastructure` and now has concrete evidence behind it.
 
 Logging behavior was made explicit at the same time: validation errors log at `info` level (they're client errors, not server errors), while real server errors continue to log at `error` level. Without this change, the global handler would have replaced per-handler error-level logging with global error-level logging — same noise, different location.
 
@@ -210,3 +210,15 @@ Implementation in `apps/server/src/preflight.ts`. Both checks log at `console.wa
 **One small lesson worth remembering: match the real bind exactly when probing for availability.** The port check originally used `createServer().listen(port)` without an explicit host and silently passed on macOS dual-stack systems — IPv6 was free while IPv4 was held, and the check bound to IPv6. Threading `host` through so the check uses the same `{ port, host }` shape as the real `server.listen()` fixes it. This creates a useful invariant: if the server's bind specifics ever change (e.g., binding only to `127.0.0.1` in dev), the preflight follows automatically.
 
 These checks fold in the operational gotchas from the May 2026 yak-shave observations (documented earlier in this doc) that came up during the QR scan diagnostic work. The "Local development environment yak-shave observations" section above describes the original symptoms; this entry describes the fix.
+
+---
+
+## Shared-schema test dedup (May 2026)
+
+`packages/shared/__tests__/schemas.test.ts` and `packages/shared/tests/schemas.test.ts` both existed for some unknown stretch of time. The followups doc filed this as "overlapping coverage, maintained consistently in Round 4, worth deduping in a separate small PR."
+
+The cleanup turned out to be even cleaner than expected: `tests/schemas.test.ts` was dead code. The vitest config's `include: ['__tests__/**/*.test.ts']` had never matched it. Coverage diff was a strict superset — every test in `tests/` was already covered (most more thoroughly) in `__tests__/`. The file received its last update during the Round 4 identity rearchitecture, but Phase B's "adaptive feed tick, expired-post filter, tighter post-input caps" updates landed only in `__tests__/`. The "maintained consistently" framing in the followups doc was technically true at one snapshot in time and silently false from Phase B onward.
+
+Fix: delete `packages/shared/tests/schemas.test.ts` and its now-empty parent directory. No content migration. 64 tests in `__tests__/` continue passing.
+
+**Load-bearing lesson — see the createApp.ts incident in the ZodError → 400 entry above.** Two examples now: createApp.ts drift hid behind "Round 4 surfaced it again" framing, and schemas test dedup hid behind "updated consistently" framing. Both had the same shape: a doc entry claimed two artifacts were maintained in lockstep when in fact one was silently drifting. The cheap check that would have caught both: "does the test runner / build pipeline / consumer actually exercise both?" If only one runs in CI, the lockstep claim is at best aspirational. Worth applying this check pre-emptively whenever a doc entry frames an item as "two files, maintained consistently."
