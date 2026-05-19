@@ -9,7 +9,7 @@ describe('Messages API', () => {
 
   beforeAll(async () => {
     await setupTestDb();
-    app = createTestApp(getConnectionString()!);
+    app = await createTestApp(getConnectionString()!);
     await app.ready();
   });
 
@@ -630,5 +630,116 @@ describe('Messages API', () => {
       });
       expect(afterBoostResponse.json().length).toBe(1);
     });
+  });
+});
+
+// Rate-limit tests use a dedicated app built with a short window so the
+// "resets after window" case can run in real time. Separate describe
+// block so the env-var override is scoped to these tests.
+describe('POST /messages rate limiting', () => {
+  let app: FastifyInstance;
+  const RATE_LIMIT_MAX = 3;
+  const RATE_LIMIT_WINDOW_MS = 500;
+
+  beforeAll(async () => {
+    process.env.POST_RATE_LIMIT_MAX = String(RATE_LIMIT_MAX);
+    process.env.POST_RATE_LIMIT_WINDOW = String(RATE_LIMIT_WINDOW_MS);
+    await setupTestDb();
+    app = await createTestApp(getConnectionString()!);
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await teardownTestDb();
+    delete process.env.POST_RATE_LIMIT_MAX;
+    delete process.env.POST_RATE_LIMIT_WINDOW;
+  });
+
+  beforeEach(async () => {
+    await clearTables();
+    // Wait out any leftover counter from the previous test so each one
+    // starts with a fresh per-user budget.
+    await new Promise((r) => setTimeout(r, RATE_LIMIT_WINDOW_MS + 50));
+  });
+
+  it('allows posts up to the limit', async () => {
+    const userId = randomUuid();
+    for (let i = 0; i < RATE_LIMIT_MAX; i++) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/messages',
+        payload: validMessage({ userId, text: `msg ${i}` }),
+      });
+      expect(res.statusCode).toBe(200);
+    }
+  });
+
+  it('returns 429 once the limit is exceeded', async () => {
+    const userId = randomUuid();
+    for (let i = 0; i < RATE_LIMIT_MAX; i++) {
+      await app.inject({
+        method: 'POST',
+        url: '/messages',
+        payload: validMessage({ userId, text: `msg ${i}` }),
+      });
+    }
+    const res = await app.inject({
+      method: 'POST',
+      url: '/messages',
+      payload: validMessage({ userId, text: 'over the limit' }),
+    });
+    expect(res.statusCode).toBe(429);
+  });
+
+  it('limits each user independently', async () => {
+    const userA = randomUuid();
+    const userB = randomUuid();
+    for (let i = 0; i < RATE_LIMIT_MAX; i++) {
+      await app.inject({
+        method: 'POST',
+        url: '/messages',
+        payload: validMessage({ userId: userA }),
+      });
+    }
+    const blockedA = await app.inject({
+      method: 'POST',
+      url: '/messages',
+      payload: validMessage({ userId: userA }),
+    });
+    expect(blockedA.statusCode).toBe(429);
+
+    const allowedB = await app.inject({
+      method: 'POST',
+      url: '/messages',
+      payload: validMessage({ userId: userB }),
+    });
+    expect(allowedB.statusCode).toBe(200);
+  });
+
+  it('allows posts again after the window elapses', async () => {
+    const userId = randomUuid();
+    for (let i = 0; i < RATE_LIMIT_MAX; i++) {
+      await app.inject({
+        method: 'POST',
+        url: '/messages',
+        payload: validMessage({ userId }),
+      });
+    }
+    const blocked = await app.inject({
+      method: 'POST',
+      url: '/messages',
+      payload: validMessage({ userId }),
+    });
+    expect(blocked.statusCode).toBe(429);
+
+    await new Promise((r) => setTimeout(r, RATE_LIMIT_WINDOW_MS + 50));
+
+    const allowed = await app.inject({
+      method: 'POST',
+      url: '/messages',
+      payload: validMessage({ userId }),
+    });
+    expect(allowed.statusCode).toBe(200);
   });
 });

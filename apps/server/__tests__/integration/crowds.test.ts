@@ -20,7 +20,7 @@ describe('Crowds API', () => {
 
   beforeAll(async () => {
     await setupTestDb();
-    app = createTestApp(getConnectionString()!);
+    app = await createTestApp(getConnectionString()!);
     await app.ready();
   });
 
