@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { FastifyInstance } from 'fastify';
-import { setupTestDb, teardownTestDb, clearTables, getConnectionString } from '../helpers/testDb';
-import { createTestApp } from '../helpers/createApp';
+import { setupTestDb, teardownTestDb, clearTables, getConnectionString, getTestDb } from '../helpers/testDb';
+import { buildApp } from '../../src/app';
 import { validCrowd, randomUuid } from '../helpers/fixtures';
 import { Pool } from 'pg';
 
@@ -20,7 +20,11 @@ describe('Crowds API', () => {
 
   beforeAll(async () => {
     await setupTestDb();
-    app = await createTestApp(getConnectionString()!);
+    app = await buildApp({
+      db: getTestDb(),
+      cors: { origin: true, credentials: true },
+      logger: false,
+    });
     await app.ready();
   });
 

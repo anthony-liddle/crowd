@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { FastifyInstance } from 'fastify';
-import { setupTestDb, teardownTestDb, clearTables, getConnectionString } from '../helpers/testDb';
-import { createTestApp } from '../helpers/createApp';
+import { setupTestDb, teardownTestDb, clearTables, getTestDb } from '../helpers/testDb';
+import { buildApp } from '../../src/app';
 import { validMessage, validBoost, portlandLocation, seattleLocation, randomUuid } from '../helpers/fixtures';
 
 describe('Messages API', () => {
@@ -9,7 +9,11 @@ describe('Messages API', () => {
 
   beforeAll(async () => {
     await setupTestDb();
-    app = await createTestApp(getConnectionString()!);
+    app = await buildApp({
+      db: getTestDb(),
+      cors: { origin: true, credentials: true },
+      logger: false,
+    });
     await app.ready();
   });
 
@@ -645,7 +649,11 @@ describe('POST /messages rate limiting', () => {
     process.env.POST_RATE_LIMIT_MAX = String(RATE_LIMIT_MAX);
     process.env.POST_RATE_LIMIT_WINDOW = String(RATE_LIMIT_WINDOW_MS);
     await setupTestDb();
-    app = await createTestApp(getConnectionString()!);
+    app = await buildApp({
+      db: getTestDb(),
+      cors: { origin: true, credentials: true },
+      logger: false,
+    });
     await app.ready();
   });
 

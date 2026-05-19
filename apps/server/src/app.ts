@@ -1,8 +1,9 @@
-import fastify, { FastifyInstance } from 'fastify';
-import cors from '@fastify/cors';
+import fastify, { FastifyInstance, FastifyServerOptions } from 'fastify';
+import cors, { FastifyCorsOptions } from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { randomBytes } from 'crypto';
 import { ZodError } from 'zod';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
   PostMessageSchema,
   QueryFeedSchema,
@@ -15,7 +16,7 @@ import {
   JoinWithTokenSchema,
   LookupTokenSchema,
 } from '@repo/shared';
-import { db } from './db/index';
+import { db as defaultDb } from './db/index';
 import { messages, messageBoosts, crowds, crowdMemberships, proximityTokens } from './db/schema';
 import { sql, asc, gt, and, eq, or, inArray, count, isNull } from 'drizzle-orm';
 
@@ -26,21 +27,17 @@ const CROWD_DURATION_MS = 24 * 60 * 60 * 1000;
 // enough that a leaked token can't be replayed later.
 const PROXIMITY_TOKEN_TTL_MS = 5 * 60 * 1000;
 
-export async function buildApp(): Promise<FastifyInstance> {
-  const server = fastify({ logger: true });
+export interface BuildAppOptions {
+  // Drizzle DB instance. Defaults to the production singleton from
+  // ./db/index. Tests pass a test-container-backed instance instead.
+  db?: NodePgDatabase<any>;
+  // @fastify/cors options. Defaults to production CORS_ORIGIN env logic.
+  cors?: FastifyCorsOptions;
+  // Fastify logger config. Defaults to enabled; tests pass `false`.
+  logger?: FastifyServerOptions['logger'];
+}
 
-  // POST /messages rate-limit defaults. Env-overridable so tests can
-  // shrink the window and so production can re-tune without a redeploy.
-  // Read inside buildApp so each app instance picks up the current env.
-  const POST_RATE_LIMIT_MAX = parseInt(process.env.POST_RATE_LIMIT_MAX ?? '10', 10);
-  const rawWindow = process.env.POST_RATE_LIMIT_WINDOW ?? '1 minute';
-  const POST_RATE_LIMIT_WINDOW: string | number = /^\d+$/.test(rawWindow)
-    ? parseInt(rawWindow, 10)
-    : rawWindow;
-
-  // CORS configuration. In production CORS_ORIGIN must be set explicitly
-  // (no wildcard). Outside production we default to '*' so local dev and
-  // tests don't need configuration. Comma-separated values become an array.
+function buildProductionCorsConfig(): FastifyCorsOptions {
   const isProduction = process.env.NODE_ENV === 'production';
   const rawCorsOrigin = process.env.CORS_ORIGIN;
 
@@ -52,15 +49,34 @@ export async function buildApp(): Promise<FastifyInstance> {
     );
   }
 
-  const corsOrigin: string | string[] = rawCorsOrigin
+  const origin: string | string[] = rawCorsOrigin
     ? rawCorsOrigin.includes(',')
       ? rawCorsOrigin.split(',').map((o) => o.trim()).filter(Boolean)
       : rawCorsOrigin
     : '*';
 
-  server.register(cors, {
-    origin: corsOrigin,
-  });
+  return { origin };
+}
+
+export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
+  const db = opts.db ?? defaultDb;
+  const server = fastify({ logger: opts.logger ?? true });
+
+  // POST /messages rate-limit defaults. Env-overridable so tests can
+  // shrink the window and so production can re-tune without a redeploy.
+  // Read inside buildApp so each app instance picks up the current env.
+  const POST_RATE_LIMIT_MAX = parseInt(process.env.POST_RATE_LIMIT_MAX ?? '10', 10);
+  const rawWindow = process.env.POST_RATE_LIMIT_WINDOW ?? '1 minute';
+  const POST_RATE_LIMIT_WINDOW: string | number = /^\d+$/.test(rawWindow)
+    ? parseInt(rawWindow, 10)
+    : rawWindow;
+
+  // CORS configuration. In production CORS_ORIGIN must be set explicitly
+  // (no wildcard). Outside production we default to '*' so local dev
+  // doesn't need configuration. Comma-separated values become an array.
+  // Tests inject a permissive config via opts.cors.
+  const corsConfig: FastifyCorsOptions = opts.cors ?? buildProductionCorsConfig();
+  server.register(cors, corsConfig);
 
   // Rate limiting is registered globally but configured per-route — we
   // only want POST /messages limited (the bad-actor location-flooding
