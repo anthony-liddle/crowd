@@ -18,9 +18,25 @@ import type {
   LookupTokenResponse,
 } from '@repo/shared';
 import * as Shared from '@repo/shared';
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
+import { ValidationError } from './errors';
 
 const BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080'; // Default for local dev
+
+// Run the shared schema's pre-send parse, converting any ZodError into the
+// typed ValidationError so callers can render field-level errors instead of
+// seeing a generic Error. Centralizes the conversion so every endpoint's
+// pre-parse behaves the same way.
+function parseRequest<S extends z.ZodTypeAny>(schema: S, data: unknown): z.infer<S> {
+  try {
+    return schema.parse(data);
+  } catch (err) {
+    if (err instanceof ZodError) {
+      throw new ValidationError(err.issues, 'client');
+    }
+    throw err;
+  }
+}
 
 class ApiClient {
   private baseUrl: string;
@@ -59,6 +75,22 @@ class ApiClient {
 
       if (!response.ok) {
         const errorBody = await response.text();
+        if (response.status === 400) {
+          try {
+            const parsed = JSON.parse(errorBody);
+            if (
+              parsed &&
+              parsed.error === 'ValidationError' &&
+              Array.isArray(parsed.issues)
+            ) {
+              throw new ValidationError(parsed.issues, 'server');
+            }
+          } catch (parseErr) {
+            // Rethrow ValidationError; swallow JSON.parse failures so the
+            // generic Error below still fires for non-JSON 400 bodies.
+            if (parseErr instanceof ValidationError) throw parseErr;
+          }
+        }
         throw new Error(`API Error: ${response.status} - ${errorBody.slice(0, 200)}`);
       }
 
@@ -82,11 +114,11 @@ class ApiClient {
   public messages = {
     post: async (data: PostMessageDto): Promise<IdResponse> => {
       // Validate input before sending
-      const parsed = Shared.PostMessageSchema.parse(data);
+      const parsed = parseRequest(Shared.PostMessageSchema, data);
       return this.request<IdResponse>('/messages', 'POST', parsed, 30000, Shared.IdResponseSchema);
     },
     feed: async (params: QueryFeedDto): Promise<MessageResponse[]> => {
-      const parsed = Shared.QueryFeedSchema.parse(params);
+      const parsed = parseRequest(Shared.QueryFeedSchema, params);
       const queryParams = new URLSearchParams();
       queryParams.append('latitude', parsed.latitude.toString());
       queryParams.append('longitude', parsed.longitude.toString());
@@ -103,18 +135,18 @@ class ApiClient {
       );
     },
     boost: async (messageId: string, data: BoostMessageDto): Promise<StatusResponse> => {
-      const parsed = Shared.BoostMessageSchema.parse(data);
+      const parsed = parseRequest(Shared.BoostMessageSchema, data);
       return this.request<StatusResponse>(`/messages/${messageId}/boost`, 'POST', parsed, 30000, Shared.StatusResponseSchema);
     },
   };
 
   public crowds = {
     create: async (data: CreateCrowdDto): Promise<IdResponse> => {
-      const parsed = Shared.CreateCrowdSchema.parse(data);
+      const parsed = parseRequest(Shared.CreateCrowdSchema, data);
       return this.request<IdResponse>('/crowds', 'POST', parsed, 30000, Shared.IdResponseSchema);
     },
     lookup: async (data: LookupCrowdsRequestDto): Promise<CrowdResponse[]> => {
-      const parsed = Shared.LookupCrowdsRequestSchema.parse(data);
+      const parsed = parseRequest(Shared.LookupCrowdsRequestSchema, data);
       return this.request<CrowdResponse[]>(
         '/crowds/lookup',
         'POST',
@@ -124,15 +156,15 @@ class ApiClient {
       );
     },
     join: async (crowdId: string, data: JoinCrowdDto): Promise<StatusResponse> => {
-      const parsed = Shared.JoinCrowdSchema.parse(data);
+      const parsed = parseRequest(Shared.JoinCrowdSchema, data);
       return this.request<StatusResponse>(`/crowds/${crowdId}/join`, 'POST', parsed, 30000, Shared.StatusResponseSchema);
     },
     leave: async (crowdId: string, data: LeaveCrowdDto): Promise<StatusResponse> => {
-      const parsed = Shared.LeaveCrowdSchema.parse(data);
+      const parsed = parseRequest(Shared.LeaveCrowdSchema, data);
       return this.request<StatusResponse>(`/crowds/${crowdId}/leave`, 'POST', parsed, 30000, Shared.StatusResponseSchema);
     },
     proximityToken: async (crowdId: string, data: CreateProximityTokenDto): Promise<ProximityTokenResponse> => {
-      const parsed = Shared.CreateProximityTokenSchema.parse(data);
+      const parsed = parseRequest(Shared.CreateProximityTokenSchema, data);
       return this.request<ProximityTokenResponse>(
         `/crowds/${crowdId}/proximity-token`,
         'POST',
@@ -142,7 +174,7 @@ class ApiClient {
       );
     },
     joinWithToken: async (data: JoinWithTokenDto): Promise<JoinWithTokenResponse> => {
-      const parsed = Shared.JoinWithTokenSchema.parse(data);
+      const parsed = parseRequest(Shared.JoinWithTokenSchema, data);
       return this.request<JoinWithTokenResponse>(
         '/crowds/join-with-token',
         'POST',
@@ -152,7 +184,7 @@ class ApiClient {
       );
     },
     lookupToken: async (data: LookupTokenDto): Promise<LookupTokenResponse> => {
-      const parsed = Shared.LookupTokenSchema.parse(data);
+      const parsed = parseRequest(Shared.LookupTokenSchema, data);
       return this.request<LookupTokenResponse>(
         '/crowds/lookup-token',
         'POST',
