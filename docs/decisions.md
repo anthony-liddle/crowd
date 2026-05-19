@@ -6,7 +6,7 @@ This document is the historical companion to `docs/followups.md`. The followups 
 
 When something ships and the doing-it is no longer the work, the record of it moves here. The working backlog stays lean.
 
-Last entry added: late-May 2026 (createApp.ts consolidation)
+Last entry added: late-May 2026 (testDb.ts migration drift fix)
 
 ---
 
@@ -280,3 +280,45 @@ Fix: parameterized `buildApp(opts?: { db?, cors?, logger? })` matching the prior
 - **When duplicate-implementation drift accumulates concrete incidents, consolidating becomes correctness work, not just maintenance work.** The drift in `/crowds/:id/join` and `/messages/:id/boost` was masking a real implementation divergence between what's tested and what runs in production. Three incidents in 48 hours made the case overwhelming; before that, the entry could have continued to ride as "polish" indefinitely.
 - **A "small DI seam" can be cleaner than it sounds when the prior art exists.** `cleanupExpired(db)` was already the pattern; extending it to `buildApp(opts)` was mechanical because the shape was proven. Surfacing the prior art during discovery is what made the 1.5-hour estimate honest rather than aspirational.
 - **The `pg.Pool` singleton-at-module-load pattern is benign when queries are gated.** Discovery worried that test paths might accidentally trigger the production singleton's connection attempt. In practice, `pg.Pool` only opens connections on first query, not at construction — so the singleton sits inert as long as nothing queries it. Worth knowing for any similar singleton patterns elsewhere.
+
+---
+
+## Field-level error rendering for validation errors (May 2026)
+
+The followups doc filed this as "consume the server's richer ValidationError contract." Discovery revealed that the shared-schema architecture means server-returned ValidationErrors essentially can't reach the user today: `packages/api/src/client.ts` pre-parses every request with `Shared.<Endpoint>Schema.parse(data)` before sending. Any value that would trip the server's schema gets caught client-side first, thrown as a `ZodError`, and (until now) stringified into a generic toast.
+
+The reframed work: catch `ZodError` from the client-side pre-parse — the path that actually fires on real user input — and wrap it as a typed `ValidationError` that callers can render inline. The server-side response handling falls out symmetrically: when the server *does* return `{ error: 'ValidationError', issues: [...] }`, it's converted to the same class via the same code path. Rare in practice (the shared schemas make server validation almost never fire), correct to handle.
+
+The implementation centralized the pre-parse wrapping into one `parseRequest<S>(schema, data)` helper in `packages/api/src/client.ts`. All 10 endpoint pre-parses route through it, and any future endpoint inherits the same behavior automatically. The small upfront refactor cost (typing the helper as `z.ZodTypeAny + z.infer<S>` for inference to work through call sites) pays back at every endpoint forever.
+
+Response-side handling: the 400-response branch parses the body as JSON, detects the ValidationError shape, and throws the typed class. The body is read exactly once — `response.json()` and `response.text()` both consume the response body, so the existing-text-then-parse-as-JSON pattern was the cleanest shape. Response-schema parse failures (server returning something the client doesn't recognize) still bubble as raw `ZodError` — those are contract violations, not user-input errors, and shouldn't render inline.
+
+One consumer wired up: `CreateMessageScreen` catches `ValidationError`, routes the `text` issue to react-hook-form's `setError`, and falls back to toast for unmatched fields (slider-derived and GPS-derived values the user can't fix inline anyway). Inline error renders in `ember-warn` color below the character counter.
+
+**Honest limitation worth knowing:** the most realistic trigger for the new inline path is gated out today. The `CreateMessageScreen.onSubmit` handler has an existing empty-text check that returns early with a toast before the pre-parse runs. So the empty-message case — the one path that would naturally exercise the new inline rendering — never reaches the new code. The field-level path is correctly wired, will fire if the empty-text guard is relaxed (a small UX decision filed separately), and will fire for any future input that bypasses the existing client-side guards. Until then it's mostly defensive plumbing that's correct to have in place.
+
+**Lessons worth carrying forward:**
+
+- **Discovery's job is sometimes to reframe the work.** The followups entry's premise was based on an architectural assumption that didn't hold once examined. Discovery surfaced the mismatch; the reframed version delivers real value but adjacent to what was originally filed. The alternative — implementing the original premise — would have produced plumbing that fires for no realistic case. Trusting discovery's finding mattered more than honoring the original framing.
+
+- **Centralizing a small refactor at the choke point compounds.** Wrapping every pre-parse via one `parseRequest` helper means new endpoints inherit the behavior without remembering to wrap them. The cost (small generic typing puzzle) paid back across 10 existing endpoints and every future one.
+
+---
+
+## testDb.ts migration drift fix (May 2026)
+
+The followups doc filed this for months: `apps/server/__tests__/helpers/testDb.ts` hand-mirrored migration SQL inline (5 CREATE TABLE statements, 10 indexes in a 63-line string template). The entry's framing was that this hand-mirror pattern allowed schema/migration drift to go unnoticed. Discovery confirmed exactly that — production had `idx_messages_active_geo` (a composite covering index for the feed query, added in migration 0003), but testDb.ts didn't. Tests had been running against a schema with 6 of the 7 reconciled indexes from migration 0003 but not the seventh, the one the feed query actually depends on.
+
+The fix: replace the inline `migrationSql` constant with a call to Drizzle's migration runner (`drizzle-orm/node-postgres/migrator.migrate`). Tests now run the actual migrations from `apps/server/drizzle/` rather than a hand-mirrored copy. Any future migration propagates to tests automatically without anyone having to remember to update the helper.
+
+Mechanical change: ~5 lines added, 67 lines removed. testDb.ts went from 146 lines to 83. No test failures from the schema change — the missing index didn't cause any test to incorrectly depend on plan-specific behavior, but tests now exercise the same physical plan production uses.
+
+Verification used a temporary probe inside `setupTestDb()` to confirm `__drizzle_migrations` had 5 rows (matching the 5 migration files) and `idx_messages_active_geo` was present in the test schema. Probe removed after confirming. This pattern — add temporary check, confirm, remove — is the cleanest proof-of-fix for infrastructure changes where you can't easily assert on the change from the public API.
+
+**Lessons worth carrying forward:**
+
+- **The hand-mirror pattern is structurally fragile.** Three concrete incidents in 48 hours surfaced this: ZodError → 400 standardization (createApp.ts forced duplicate edits), schemas test dedup (parallel test file was dead code drifting silently), and now testDb.ts migration drift (the 7th index never made it to tests). Each was small individually; together they're a pattern. When a doc entry frames two artifacts as "maintained consistently" or "updated in lockstep," the cheap check that prevents silent drift is "does the runner / build pipeline / consumer actually exercise both?" If only one runs, the lockstep claim is at best aspirational.
+
+- **Temporary probes are clean for proof-of-fix.** For changes where the success criterion isn't visible from the public API (an index exists, a migration ran, an env var was read), a temporary check inserted into the relevant code path is more honest than just running existing tests and saying "looks fine." Add the check, confirm the result, remove the check. The change set stays clean and the verification was real.
+
+- **The "drift" framing in followups entries should imply urgency proportional to evidence.** This entry sat in followups for months with the same wording. The morning's createApp.ts work and the schemas dedup were the first two incidents that turned an abstract concern into concrete evidence. By the time this fix landed, the drift had bitten three times — but the entry's framing in followups never changed to reflect that. Worth being more aggressive about updating followups entries when concrete incidents appear, rather than letting them ride at their original framing.

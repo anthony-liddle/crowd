@@ -1,6 +1,8 @@
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
+import path from 'node:path';
 import * as schema from '../../src/db/schema';
 
 let container: StartedPostgreSqlContainer;
@@ -9,71 +11,6 @@ let testDb: ReturnType<typeof drizzle>;
 
 // Track if we're in shutdown mode to suppress expected errors
 let isShuttingDown = false;
-
-const migrationSql = `
--- Create crowds table
-CREATE TABLE IF NOT EXISTS "crowds" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-  "name" text NOT NULL,
-  "owner_id" uuid NOT NULL,
-  "is_open" boolean DEFAULT true NOT NULL,
-  "created_at" timestamp DEFAULT now() NOT NULL,
-  "expires_at" timestamp NOT NULL
-);
-CREATE INDEX IF NOT EXISTS "crowds_owner_id_idx" ON "crowds" ("owner_id");
-CREATE INDEX IF NOT EXISTS "crowds_expires_at_idx" ON "crowds" ("expires_at");
-
--- Create crowd_memberships table
-CREATE TABLE IF NOT EXISTS "crowd_memberships" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-  "crowd_id" uuid NOT NULL REFERENCES "crowds"("id") ON DELETE CASCADE,
-  "user_id" uuid NOT NULL,
-  "joined_at" timestamp DEFAULT now() NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS "unique_crowd_membership" ON "crowd_memberships" ("crowd_id", "user_id");
-
--- Create messages table
-CREATE TABLE IF NOT EXISTS "messages" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-  "text" text NOT NULL,
-  "latitude" numeric NOT NULL,
-  "longitude" numeric NOT NULL,
-  "radius_meters" integer NOT NULL,
-  "active_minutes" integer NOT NULL,
-  "created_at" timestamp DEFAULT now() NOT NULL,
-  "expires_at" timestamp NOT NULL,
-  "owner_id" uuid,
-  "boost_count" integer DEFAULT 0 NOT NULL,
-  "crowd_id" uuid REFERENCES "crowds"("id") ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS "messages_owner_id_idx" ON "messages" ("owner_id");
-CREATE INDEX IF NOT EXISTS "messages_expires_at_idx" ON "messages" ("expires_at");
-CREATE INDEX IF NOT EXISTS "messages_crowd_id_idx" ON "messages" ("crowd_id");
-
--- Create message_boosts table
-CREATE TABLE IF NOT EXISTS "message_boosts" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-  "message_id" uuid NOT NULL REFERENCES "messages"("id"),
-  "user_id" uuid NOT NULL,
-  "latitude" numeric NOT NULL,
-  "longitude" numeric NOT NULL,
-  "boosted_at" timestamp DEFAULT now() NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS "unique_user_boost" ON "message_boosts" ("message_id", "user_id");
-CREATE INDEX IF NOT EXISTS "message_boosts_message_id_idx" ON "message_boosts" ("message_id");
-
--- Create proximity_tokens table
-CREATE TABLE IF NOT EXISTS "proximity_tokens" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-  "crowd_id" uuid NOT NULL REFERENCES "crowds"("id") ON DELETE CASCADE,
-  "token" text NOT NULL,
-  "created_at" timestamp DEFAULT now() NOT NULL,
-  "expires_at" timestamp NOT NULL,
-  "used_at" timestamp
-);
-CREATE UNIQUE INDEX IF NOT EXISTS "unique_proximity_token" ON "proximity_tokens" ("token");
-CREATE INDEX IF NOT EXISTS "proximity_tokens_crowd_id_idx" ON "proximity_tokens" ("crowd_id");
-`;
 
 export async function setupTestDb() {
   container = await new PostgreSqlContainer('postgres:15')
@@ -96,8 +33,9 @@ export async function setupTestDb() {
 
   testDb = drizzle(pool, { schema });
 
-  // Run migrations
-  await pool.query(migrationSql);
+  await migrate(testDb, {
+    migrationsFolder: path.resolve(__dirname, '../../drizzle'),
+  });
 
   return { db: testDb, connectionString };
 }
