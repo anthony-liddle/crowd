@@ -4,7 +4,7 @@ The working backlog of what's pending. Lean by design — when items ship, they 
 
 For working principles, historical decisions, and lessons from completed work, see `docs/decisions.md`.
 
-Last updated: late-May 2026 (post-schemas-dedup).
+Last updated: late-May 2026 (post-morning-arc reconciliation).
 
 ---
 
@@ -18,22 +18,24 @@ Last updated: late-May 2026 (post-schemas-dedup).
 
 Internal TestFlight has been painful for adding testers. Moving to external testing (up to 10,000 users) requires Apple's Beta App Review on the operational side, plus a small set of followups items that meaningfully affect first-impression quality. Listed here as a filtered view of the items below.
 
-**Genuine blockers (would be operationally bad to ship wider without):**
-
-- Cleanup script for production — see Deploy and CI. Without automated cleanup, the dev DB grows until it hits Neon's free-tier ceiling. Worse with more users posting.
-- Server validation of post coordinates — see Server-side defense in depth. Currently trusts client-supplied lat/lng. Internal testers are trusted; wider testers aren't. Even rate-limiting per user would meaningfully change the threat model.
+**Genuine blockers:** both shipped.
+- Cleanup script for production — shipped, see `docs/decisions.md`.
+- Server validation of post coordinates — shipped (rate-limit version), see `docs/decisions.md`.
 
 **Strong-soft blockers (would meaningfully reduce first-impression quality):**
 
 - Onboarding / first-launch identity rotation UX — see Deferred design surfaces. Internal testers can have the privacy model explained; wider testers can't.
 - Field-level error rendering for server validation errors — see Mobile-specific. More testers surface more edge cases; generic toasts won't scale.
-- Deploy notifications — see Deploy and CI. With more testers, a broken deploy gets discovered by an apologetic Slack message rather than by you noticing.
+
+**Not actually on this track (despite previous framing):**
+
+- Deploy notifications. Filed in Deploy and CI. At current team shape (solo dev, 1-2 testers, one collaborator joining), failed deploys get noticed within hours via tester reports or your own check-ins. Worth wiring up when the team shape — number of collaborators, tester pool size, time-zone spread — actually justifies a notification channel. Until then it's premature ceremony.
 
 **Not a code item but on the same track:**
 
 - Apple Beta App Review for TestFlight external testing. Operational work (app metadata, screenshots, beta description, content warnings, export compliance). Can run in parallel with the code items above; typically a few days to a week of Apple review time after submission.
 
-When all of the above are addressed (or you decide they don't apply), the path to wider TestFlight is open. Everything else in this doc is either polish, longer-horizon work, or pending tester feedback.
+When the strong-soft blockers are addressed (or you decide they don't apply), the path to wider TestFlight is open. Everything else in this doc is either polish, longer-horizon work, or pending tester feedback.
 
 ## Deferred design surfaces (from the Ember migration)
 
@@ -70,7 +72,6 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 
 - **React Native component testing setup.** Mobile's Jest is `testEnvironment: 'node'` and has never been wired for RN component rendering. Decision needed: jest-expo + @testing-library/react-native, vs. Maestro for flows, vs. Detox for E2E. The work isn't just preset config; also writing native-module mocks (Appearance, expo-location) and tuning `transformIgnorePatterns`. Single deliberate piece of work, not folded into another phase. Especially relevant after PR #70: the unified Modal state machine has internal states that would benefit from component-level tests rather than integration tests.
 - **Test helper drift from real migrations.** `apps/server/__tests__/helpers/testDb.ts` hand-mirrors migration SQL inline. This is what allowed the 6-index schema/migration drift to go unnoticed. Replace inlined SQL with the actual Drizzle migration runner so tests exercise the same code path production will.
-- **`createApp.ts` test-app drift.** `apps/server/__tests__/helpers/createApp.ts` is a hand-mirrored copy of the production routes in `apps/server/src/app.ts`. A genuine correctness hazard, not aesthetic drift — see `docs/decisions.md` for the ZodError → 400 incident where the same edit had to be applied twice. Fix is the same shape: delete `createApp.ts` and have integration tests instantiate the real `buildApp()` (passing the test connection string via env or a small DI seam). Right time to address this is during the React Native component testing infrastructure pass — both helpers' lifetimes are tied to the testing-infra story.
 
 ### Build and dependency hygiene
 
@@ -80,13 +81,11 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 
 ### Server-side defense in depth
 
-- **Server validation of post coordinates.** `POST /messages` currently trusts client-supplied lat/lng verbatim. The accidental-stale-location case is fixed at the client; the malicious case (a bad actor posting at arbitrary coordinates) is not. Possible defenses, in order of complexity: rate-limit posts per user with location attached; reject posts whose location is more than X km from the user's recent posts in the last Y hours; require signed location attestations (heavy). Filed as a real future ticket, not urgent.
 - **Accuracy threshold in post validation.** GPS readings carry an `accuracy` field (radius of confidence in meters). A 0.1 km post with ±500 m accuracy is essentially randomly geotagged. Reject readings where `accuracy > radiusMeters / 2` (so a 100m post needs ±50m or better; a 5km post is happy with ±2.5km). Worth implementing once we have data on what real-world accuracy distributions look like.
 
 ### Deploy and CI
 
 - **Test gating before deploy.** C6's deploy workflows fire on push to main directly; the existing test workflow runs in parallel, not as a blocker. A future tightening would make `Deploy Server`'s `needs:` reference the test job. Filed as Phase E concern (let deploy workflows stabilize first; isolate test-gating bugs from deploy-config bugs).
-- **Cleanup script for production.** `apps/server/src/scripts/cleanup-expired.ts` is a one-shot script with `process.exit` at the end. To run on a schedule: refactor to extract a testable function, write a real test, and wire it as a Fly cron (or GitHub Actions schedule for dev). Required before production traffic, where stale rows accumulate.
 - **`/health` could go deeper.** Currently verifies DB connection via SELECT 1. Could verify schema version, all expected tables exist, etc. Probably not worth doing until production failures motivate it; deeper probes can fail-loop a deploy if migrations are mid-application.
 - **Deploy notifications.** Workflow status only visible in Actions tab. Slack/Discord/email hooks would be straightforward additions when the dev environment becomes the thing real testers hit.
 - **Shared schema changes require server image rebuild.** `packages/shared` isn't bind-mounted into the dev compose container; schema changes need `docker compose up -d --build server` before the running server picks them up. Bind-mount `packages/shared/dist` into the dev compose so a host `pnpm --filter @repo/shared build` propagates without an image rebuild. Low priority while shared schema churn is rare.
