@@ -1,4 +1,4 @@
-> **Archived snapshot.** This document captures the state of the project at the time it was written. It is preserved for historical context but is not current. For current state, see the followups doc and the main README.
+> **Archived snapshot.** This document captures the state of the project at the time it was written. It is preserved for historical context but is not current. For historical context that's been kept current, see `docs/decisions.md`. For the active backlog, see `docs/followups.md`. For overall orientation, see the main README.
 
 # Step-by-Step Guide: Releasing Crowd to the iOS App Store
 
