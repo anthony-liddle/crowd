@@ -6,7 +6,7 @@ This document is the historical companion to `docs/followups.md`. The followups 
 
 When something ships and the doing-it is no longer the work, the record of it moves here. The working backlog stays lean.
 
-Last entry added: late-May 2026 (shared-schema test dedup)
+Last entry added: late-May 2026 (createApp.ts consolidation)
 
 ---
 
@@ -190,7 +190,7 @@ Validation errors on the server returned 500 Internal Server Error for any handl
 
 Fix: added a global `setErrorHandler` in `buildApp()` that distinguishes `ZodError` from other thrown errors, returning 400 with `{ error: 'ValidationError', issues: [...] }` for the former and preserving the existing 500 shape for everything else. Each of the 10 catches gained a single `if (err instanceof ZodError) throw err;` line at the top to let validation errors propagate to the global handler while preserving the existing per-handler logging for real server errors. Five tests asserting the old 500 behavior were updated to assert 400.
 
-**Load-bearing lesson surfaced: the `createApp.ts` test-helper drift is a real correctness hazard, not a polish item.** The production fix initially looked complete, but tests still saw 500s because they were exercising `apps/server/__tests__/helpers/createApp.ts` — a hand-mirrored copy of the production routes — rather than the production app. The same edit had to be applied twice. The followups doc had filed `createApp.ts` drift months earlier; this incident is the first one where the drift caused a visible problem rather than just being aesthetically unsatisfying. A second instance of the same shape surfaced shortly after with the shared-schema test dedup — see the entry below. The structural fix (have integration tests instantiate the real `buildApp()`) remains on the active backlog under `### Testing infrastructure` and now has concrete evidence behind it.
+**Load-bearing lesson surfaced: the `createApp.ts` test-helper drift was a real correctness hazard, not a polish item.** The production fix initially looked complete, but tests still saw 500s because they were exercising the helper, not the production app — the same edit had to be applied twice. This incident was the first concrete instance where the drift caused a visible problem. Two more followed within 48 hours (schemas test dedup; rate-limit on POST /messages), at which point the structural fix shipped — see "createApp.ts consolidation" below.
 
 Logging behavior was made explicit at the same time: validation errors log at `info` level (they're client errors, not server errors), while real server errors continue to log at `error` level. Without this change, the global handler would have replaced per-handler error-level logging with global error-level logging — same noise, different location.
 
@@ -222,3 +222,61 @@ The cleanup turned out to be even cleaner than expected: `tests/schemas.test.ts`
 Fix: delete `packages/shared/tests/schemas.test.ts` and its now-empty parent directory. No content migration. 64 tests in `__tests__/` continue passing.
 
 **Load-bearing lesson — see the createApp.ts incident in the ZodError → 400 entry above.** Two examples now: createApp.ts drift hid behind "Round 4 surfaced it again" framing, and schemas test dedup hid behind "updated consistently" framing. Both had the same shape: a doc entry claimed two artifacts were maintained in lockstep when in fact one was silently drifting. The cheap check that would have caught both: "does the test runner / build pipeline / consumer actually exercise both?" If only one runs in CI, the lockstep claim is at best aspirational. Worth applying this check pre-emptively whenever a doc entry frames an item as "two files, maintained consistently."
+
+---
+
+## Cleanup script automated (May 2026)
+
+`apps/server/src/scripts/cleanup-expired.ts` was a one-shot script with `process.exit` at the end — runnable manually, but not scheduled. Without automation, the dev DB grew monotonically toward Neon's free-tier ceiling, and the problem would accelerate with more testers.
+
+Fix: refactored the deletion logic into a pure function (`apps/server/src/jobs/cleanupExpired.ts`) that takes a Drizzle DB instance and returns counts. The original script became a thin wrapper preserving manual `pnpm cleanup`. A scheduled entry point (`apps/server/src/jobs/runCleanupJob.ts`) is compiled into the server image and triggered by a Fly scheduled machine running hourly.
+
+**One operational thing worth knowing:** Fly's scheduling for ad-hoc tasks is imperative (`fly machine run --schedule hourly --command ...`), not declarative in `fly.toml`. The activation command is committed as `apps/server/scripts/setup-cleanup-schedule.sh` with a comment block explaining the rationale (image tag, cadence, production rollout path). It's a one-time invocation per environment — running it after deploy registers the schedule with Fly. The script is self-documenting; future readers don't have to reconstruct the decision from tribal knowledge.
+
+Cadence is hourly. Server-side and client-side filters already exclude expired rows from query results, so user-visible behavior is correct regardless of when the actual DELETE happens. Hourly is the finest cadence Fly's native scheduler supports without falling back to GitHub Actions; for dev traffic this is fine.
+
+Four integration tests cover the function directly. No test of the Fly scheduling itself — the schedule is configuration, not code, and Fly's own machinery is trusted.
+
+---
+
+## Rate-limit on POST /messages (May 2026)
+
+The wider TestFlight threat model includes a malicious or buggy client posting in bursts — either at one location or across many. The cleanest defense for that specific case is a per-user rate limit on `POST /messages`, returning 429 Too Many Requests when the budget is exceeded.
+
+Implementation uses `@fastify/rate-limit` (new dependency, Fastify-5-compatible major). Registered with `global: false` so it applies per-route rather than to all endpoints. Per-route config on `POST /messages` with `hook: 'preHandler'` so body parsing happens first (the rate-limit key comes from `body.userId`, which doesn't exist until the body is parsed).
+
+Defaults: 10 posts per 1-minute window. Both are overridable via `POST_RATE_LIMIT_MAX` and `POST_RATE_LIMIT_WINDOW` env vars — useful for the test suite, which sets a short window so the "rate limit resets after the window" test can run in 500ms instead of 60 seconds.
+
+Identity key: `body.userId` with `req.ip` fallback. The `userId` field is the per-context user identity (rotating global identity for global posts, crowd-specific ID for crowd posts). The IP fallback covers requests that arrive malformed (body parsing fails before the rate-limit hook reaches the userId).
+
+**Two Fastify lifecycle gotchas worth remembering:**
+
+- The plugin's `hook` is a registration-time option, not per-route config. Setting it per-route is silently ignored. Set it once at registration.
+- `app.register(rateLimit, ...)` must be `await`ed before any routes are declared. If the await is missed, the plugin's `onRoute` hook never fires for the routes already registered, and per-route configs are silently dropped. The first symptom was `x-ratelimit-*` response headers coming back undefined.
+
+The threat model this addresses: burst posting. The threat model it doesn't address: a single well-paced legitimate-looking post at arbitrary coordinates. Those are the higher-complexity defenses (location consistency with recent activity, GPS accuracy thresholds, signed location attestations) and remain on the active backlog.
+
+For production, the in-memory rate-limit storage works but doesn't survive across Fly machine restarts. Redis adapter is available in the plugin when production traffic justifies it.
+
+---
+
+## createApp.ts consolidation (May 2026)
+
+For an unknown stretch of time, `apps/server/__tests__/helpers/createApp.ts` was a hand-mirrored 561-line copy of the production routes in `apps/server/src/app.ts`. The followups doc filed this for months as "drift" — every endpoint change had to be made in both files, and the entries called for a structural fix paired with the React Native component testing infrastructure pass.
+
+Three concrete incidents in two days made the case urgent:
+- **ZodError → 400 standardization:** the same `if (err instanceof ZodError) throw err;` line had to be added in both files. Production fix initially looked complete; tests still saw 500s because they were exercising the helper.
+- **Schemas test dedup:** the dead-code finding (`tests/schemas.test.ts` never ran) was the same shape of unverified-lockstep assumption that the createApp.ts entry had been carrying.
+- **Rate-limit on POST /messages:** registration and the matching error-handler tweak had to be added to both files.
+
+Beyond the maintenance cost, discovery surfaced a real correctness divergence between the two implementations. `POST /crowds/:id/join` and `POST /messages/:id/boost` had identical observable behavior achieved via different mechanisms — production pre-checks for existing rows; the test helper caught unique-constraint violations. The tests had been passing against either mechanism because their assertions were permissive (`>= 400 && < 600`). If production had ever dropped the pre-check (or vice versa), the test would have silently kept passing while shipping broken behavior.
+
+Fix: parameterized `buildApp(opts?: { db?, cors?, logger? })` matching the prior art already in `cleanupExpired(db)`. Each option defaults to production behavior; tests pass `{ db: getTestDb(), cors: { origin: true, credentials: true }, logger: false }`. The ~30 `db.<verb>` references inside `buildApp` were resolved cleanly by renaming the singleton import to `defaultDb` and shadowing it with a function-local `db` const — the call sites themselves didn't change.
+
+`createApp.ts` was deleted (-561 lines). Four test call sites updated. Net change: -529 lines across 5 files. All 55 server tests pass against the consolidated handler.
+
+**Lessons worth carrying forward:**
+
+- **When duplicate-implementation drift accumulates concrete incidents, consolidating becomes correctness work, not just maintenance work.** The drift in `/crowds/:id/join` and `/messages/:id/boost` was masking a real implementation divergence between what's tested and what runs in production. Three incidents in 48 hours made the case overwhelming; before that, the entry could have continued to ride as "polish" indefinitely.
+- **A "small DI seam" can be cleaner than it sounds when the prior art exists.** `cleanupExpired(db)` was already the pattern; extending it to `buildApp(opts)` was mechanical because the shape was proven. Surfacing the prior art during discovery is what made the 1.5-hour estimate honest rather than aspirational.
+- **The `pg.Pool` singleton-at-module-load pattern is benign when queries are gated.** Discovery worried that test paths might accidentally trigger the production singleton's connection attempt. In practice, `pg.Pool` only opens connections on first query, not at construction — so the singleton sits inert as long as nothing queries it. Worth knowing for any similar singleton patterns elsewhere.
