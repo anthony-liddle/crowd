@@ -4,7 +4,7 @@ The working backlog of what's pending. Lean by design — when items ship, they 
 
 For working principles, historical decisions, and lessons from completed work, see `docs/decisions.md`.
 
-Last updated: late-May 2026 (followups/decisions split).
+Last updated: late-May 2026 (post-preflight cleanup).
 
 ---
 
@@ -31,7 +31,6 @@ These were intentionally out of scope for the design migration but will need att
 
 Background: `docs/decisions.md` → Identity model rearchitecture.
 
-- ~~**Validation error returns 500 on the server (should be 400).**~~ Shipped (global `setErrorHandler` returning 400 with `{ error: 'ValidationError', issues: [...] }` for `ZodError`, 500 fallback preserved for everything else; 5 tests updated from 500 → 400; same fix applied to test helper `createApp.ts` to match).
 - **Eight orphaned crowds in the production dev DB from Round 2 testing.** Memberships keyed by mainUserId from before Round 4. Will self-clean within 24h via expiration; no action needed.
 - **Two shared-schema test files** (`packages/shared/__tests__/schemas.test.ts` and `packages/shared/tests/schemas.test.ts`) — overlapping coverage, likely a leftover from a directory rename. Updated both consistently in Round 4. Worth deduping in a separate small PR.
 
@@ -51,8 +50,7 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 
 - **React Native component testing setup.** Mobile's Jest is `testEnvironment: 'node'` and has never been wired for RN component rendering. Decision needed: jest-expo + @testing-library/react-native, vs. Maestro for flows, vs. Detox for E2E. The work isn't just preset config; also writing native-module mocks (Appearance, expo-location) and tuning `transformIgnorePatterns`. Single deliberate piece of work, not folded into another phase. Especially relevant after PR #70: the unified Modal state machine has internal states that would benefit from component-level tests rather than integration tests.
 - **Test helper drift from real migrations.** `apps/server/__tests__/helpers/testDb.ts` hand-mirrors migration SQL inline. This is what allowed the 6-index schema/migration drift to go unnoticed. Replace inlined SQL with the actual Drizzle migration runner so tests exercise the same code path production will.
-- **`createApp.ts` test-app drift.** Same shape of problem as the `testDb.ts` migration-SQL inlining: `apps/server/__tests__/helpers/createApp.ts` is a hand-mirrored copy of the production routes in `apps/server/src/app.ts`. Surfaced again during the ZodError → 400 standardization (May 2026): the production fix initially looked complete, but tests still saw 500s because they were exercising the helper, not the production app — the same edit had to be applied twice. This is a genuine correctness hazard, not aesthetic drift. Also surfaced during Round 4 — every endpoint change had to be made in both files. Fix is the same shape: delete `createApp.ts` and have integration tests instantiate the real `buildApp()` (passing the test connection string via env or a small DI seam). Right time to address this is during the React Native component testing infrastructure pass — both helpers' lifetimes are tied to the testing-infra story.
-- ~~**ZodError → 400 standardization.**~~ Shipped — see Identity model — open items above.
+- **`createApp.ts` test-app drift.** `apps/server/__tests__/helpers/createApp.ts` is a hand-mirrored copy of the production routes in `apps/server/src/app.ts`. A genuine correctness hazard, not aesthetic drift — see `docs/decisions.md` for the ZodError → 400 incident where the same edit had to be applied twice. Fix is the same shape: delete `createApp.ts` and have integration tests instantiate the real `buildApp()` (passing the test connection string via env or a small DI seam). Right time to address this is during the React Native component testing infrastructure pass — both helpers' lifetimes are tied to the testing-infra story.
 
 ### Build and dependency hygiene
 
@@ -72,8 +70,6 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 - **`/health` could go deeper.** Currently verifies DB connection via SELECT 1. Could verify schema version, all expected tables exist, etc. Probably not worth doing until production failures motivate it; deeper probes can fail-loop a deploy if migrations are mid-application.
 - **Deploy notifications.** Workflow status only visible in Actions tab. Slack/Discord/email hooks would be straightforward additions when the dev environment becomes the thing real testers hit.
 - **Shared schema changes require server image rebuild.** `packages/shared` isn't bind-mounted into the dev compose container; schema changes need `docker compose up -d --build server` before the running server picks them up. Bind-mount `packages/shared/dist` into the dev compose so a host `pnpm --filter @repo/shared build` propagates without an image rebuild. Low priority while shared schema churn is rare.
-- **Dev-script startup check for port 8080.** Docker compose holding the port silently blocks `pnpm dev:server` from binding; the failure mode isn't surfaced clearly in the dev server logs. Add a preflight check that fails loudly if 8080 is already taken before `tsx watch` starts.
-- **Dev server migration-drift warning.** Migrations are a manual step (`pnpm migrate` from `apps/server`), so pulling a branch with new migrations leaves the local DB schema behind the code. Symptom: opaque "Failed query: select ... from <table>" errors. Add a startup check that compares applied migrations against the expected set and warns on drift.
 
 ### Mobile-specific
 
