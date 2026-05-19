@@ -4,7 +4,7 @@ The working backlog of what's pending. Lean by design — when items ship, they 
 
 For working principles, historical decisions, and lessons from completed work, see `docs/decisions.md`.
 
-Last updated: late-May 2026 (post-morning-arc reconciliation).
+Last updated: late-May 2026 (field-level errors + testDb migration runner shipped).
 
 ---
 
@@ -25,7 +25,6 @@ Internal TestFlight has been painful for adding testers. Moving to external test
 **Strong-soft blockers (would meaningfully reduce first-impression quality):**
 
 - Onboarding / first-launch identity rotation UX — see Deferred design surfaces. Internal testers can have the privacy model explained; wider testers can't.
-- Field-level error rendering for server validation errors — see Mobile-specific. More testers surface more edge cases; generic toasts won't scale.
 
 **Not actually on this track (despite previous framing):**
 
@@ -71,7 +70,6 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 ### Testing infrastructure
 
 - **React Native component testing setup.** Mobile's Jest is `testEnvironment: 'node'` and has never been wired for RN component rendering. Decision needed: jest-expo + @testing-library/react-native, vs. Maestro for flows, vs. Detox for E2E. The work isn't just preset config; also writing native-module mocks (Appearance, expo-location) and tuning `transformIgnorePatterns`. Single deliberate piece of work, not folded into another phase. Especially relevant after PR #70: the unified Modal state machine has internal states that would benefit from component-level tests rather than integration tests.
-- **Test helper drift from real migrations.** `apps/server/__tests__/helpers/testDb.ts` hand-mirrors migration SQL inline. This is what allowed the 6-index schema/migration drift to go unnoticed. Replace inlined SQL with the actual Drizzle migration runner so tests exercise the same code path production will.
 
 ### Build and dependency hygiene
 
@@ -96,7 +94,7 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 - **`useRelaySettings` singleton under Suspense.** Today it's a singleton via `useSyncExternalStore`. If it ever needs to render in Suspense / Concurrent contexts, the in-memory state could drift from AsyncStorage. Wrap in a Provider if scaling.
 - **Pre-existing TS errors in `apps/mobile/tests/`.** Resolved by deletion in Phase A. Listed here only because the historical reports reference it.
 - **`refreshLocation` cleanup for consistency.** The existing `refreshLocation` on `useLocation` still calls `requestForegroundPermissionsAsync` on every invocation (re-prompts every time). It's no longer on the hot path (replaced by `getFreshLocation` for action-time use), but worth collapsing to use the same `getFreshLocation` semantics (read permission first, request only when missing) for consistency. Small future cleanup.
-- **Field-level error rendering for server validation errors.** The server now returns `{ error: 'ValidationError', issues: [...] }` with structured field paths and messages on 400s (per the ZodError → 400 standardization). The mobile client's API service falls back to a generic toast instead of surfacing per-field messages. Worth implementing when the next screen with multiple fields lands (Settings/preferences, onboarding identity rotation) — those screens benefit most from "this field is wrong, here's why" feedback. Until then, the toast fallback is fine for the existing single-field flows.
+- **Empty-text guard in CreateMessageScreen.** The `onSubmit` handler short-circuits with a toast when the trimmed text is empty, before the API client's pre-parse runs. This means the empty-message case (the most realistic trigger for inline field-level rendering) never exercises the ValidationError path that now exists. If inline rendering is wanted for empty submissions, remove the early-return guard — the field-level plumbing already handles it. Small UX decision (generic toast vs. inline error for the empty case); flagged as a tiny optional cleanup, not blocking.
 - **Background location strategy.** Independent of the stale-location fix: do we ever want the app to refresh location in the background, or on app-resume via `AppState` listeners? If yes, separate design conversation about battery, permissions, iOS background modes. The on-demand fresh fetch at action time covers the immediate need; background tracking is a future optimization with real costs.
 
 ### Repo hygiene observations
