@@ -6,7 +6,7 @@ This document is the historical companion to `docs/followups.md`. The followups 
 
 When something ships and the doing-it is no longer the work, the record of it moves here. The working backlog stays lean.
 
-Last entry added: late-May 2026 (followups/decisions split)
+Last entry added: late-May 2026 (preflight checks)
 
 ---
 
@@ -181,3 +181,32 @@ Surfaced during the QR scan diagnostic work. Filed here so future-you doesn't re
 - **Dev build vs TestFlight build coexistence.** They use the same bundle identifier. Installing one over the other is fine; running both at once on the same device isn't.
 
 These are all real-world problems future-you will hit if working on multiple machines or after long breaks. Worth a "Local development setup" doc that walks through them, or just keep this list updated.
+
+---
+
+## ZodError → 400 standardization (May 2026)
+
+Validation errors on the server returned 500 Internal Server Error for any handler that did `try { Schema.parse(body); ... } catch { return reply.status(500) }`. Ten handlers in `apps/server/src/app.ts` used this pattern. Schema-validation failures are client errors, so 400 is the correct status.
+
+Fix: added a global `setErrorHandler` in `buildApp()` that distinguishes `ZodError` from other thrown errors, returning 400 with `{ error: 'ValidationError', issues: [...] }` for the former and preserving the existing 500 shape for everything else. Each of the 10 catches gained a single `if (err instanceof ZodError) throw err;` line at the top to let validation errors propagate to the global handler while preserving the existing per-handler logging for real server errors. Five tests asserting the old 500 behavior were updated to assert 400.
+
+**Load-bearing lesson surfaced: the `createApp.ts` test-helper drift is a real correctness hazard, not a polish item.** The production fix initially looked complete, but tests still saw 500s because they were exercising `apps/server/__tests__/helpers/createApp.ts` — a hand-mirrored copy of the production routes — rather than the production app. The same edit had to be applied twice. The followups doc had filed `createApp.ts` drift months earlier; this incident is the first one where the drift caused a visible problem rather than just being aesthetically unsatisfying. The structural fix (have integration tests instantiate the real `buildApp()`) remains on the active backlog under `### Testing infrastructure` and now has concrete evidence behind it.
+
+Logging behavior was made explicit at the same time: validation errors log at `info` level (they're client errors, not server errors), while real server errors continue to log at `error` level. Without this change, the global handler would have replaced per-handler error-level logging with global error-level logging — same noise, different location.
+
+The mobile client now receives a richer error body but doesn't yet render the `issues[]` array; it falls back to a generic toast. Field-level error rendering is filed as a small mobile followup, deferred until the next screen with multiple fields lands (settings, onboarding).
+
+---
+
+## Dev-server preflight checks (May 2026)
+
+Two checks now run at dev-server startup before `server.listen()`, gated to `NODE_ENV !== 'production'`:
+
+- **Port 8080 availability** — fatal on conflict, with a diagnostic + recovery message that explicitly names Docker compose as the usual culprit and gives both `docker compose down` (preferred) and `lsof -ti :8080 | xargs kill -9` (fallback) as recovery commands.
+- **Migration drift** — warns when `_journal.json` entry count and `drizzle.__drizzle_migrations` row count diverge, in either direction. "Behind" means run migrations (common). "Ahead" means a branch was reverted (rare). Fresh DB (table doesn't exist) gets its own message.
+
+Implementation in `apps/server/src/preflight.ts`. Both checks log at `console.warn` level rather than via the Fastify logger because the logger isn't fully initialized at preflight time.
+
+**One small lesson worth remembering: match the real bind exactly when probing for availability.** The port check originally used `createServer().listen(port)` without an explicit host and silently passed on macOS dual-stack systems — IPv6 was free while IPv4 was held, and the check bound to IPv6. Threading `host` through so the check uses the same `{ port, host }` shape as the real `server.listen()` fixes it. This creates a useful invariant: if the server's bind specifics ever change (e.g., binding only to `127.0.0.1` in dev), the preflight follows automatically.
+
+These checks fold in the operational gotchas from the May 2026 yak-shave observations (documented earlier in this doc) that came up during the QR scan diagnostic work. The "Local development environment yak-shave observations" section above describes the original symptoms; this entry describes the fix.
