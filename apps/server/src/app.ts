@@ -1,5 +1,6 @@
 import fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { randomBytes } from 'crypto';
 import { ZodError } from 'zod';
 import {
@@ -25,8 +26,17 @@ const CROWD_DURATION_MS = 24 * 60 * 60 * 1000;
 // enough that a leaked token can't be replayed later.
 const PROXIMITY_TOKEN_TTL_MS = 5 * 60 * 1000;
 
-export function buildApp(): FastifyInstance {
+export async function buildApp(): Promise<FastifyInstance> {
   const server = fastify({ logger: true });
+
+  // POST /messages rate-limit defaults. Env-overridable so tests can
+  // shrink the window and so production can re-tune without a redeploy.
+  // Read inside buildApp so each app instance picks up the current env.
+  const POST_RATE_LIMIT_MAX = parseInt(process.env.POST_RATE_LIMIT_MAX ?? '10', 10);
+  const rawWindow = process.env.POST_RATE_LIMIT_WINDOW ?? '1 minute';
+  const POST_RATE_LIMIT_WINDOW: string | number = /^\d+$/.test(rawWindow)
+    ? parseInt(rawWindow, 10)
+    : rawWindow;
 
   // CORS configuration. In production CORS_ORIGIN must be set explicitly
   // (no wildcard). Outside production we default to '*' so local dev and
@@ -52,6 +62,17 @@ export function buildApp(): FastifyInstance {
     origin: corsOrigin,
   });
 
+  // Rate limiting is registered globally but configured per-route — we
+  // only want POST /messages limited (the bad-actor location-flooding
+  // vector), not reads. `hook: 'preHandler'` is set here (it's a
+  // plugin-registration-level option) so the per-route keyGenerator can
+  // read the parsed request body. The in-memory store is sufficient for
+  // dev and single-instance Fly; Redis is a config change away.
+  //
+  // Awaited so the plugin's onRoute hook is in place before routes are
+  // declared — otherwise per-route `config.rateLimit` is silently ignored.
+  await server.register(rateLimit, { global: false, hook: 'preHandler' });
+
   // Global error handler. Zod validation failures are client errors; they
   // return 400 with the issues serialized. Everything else is treated as a
   // server error and returns 500 with the existing response shape. Logging
@@ -63,6 +84,12 @@ export function buildApp(): FastifyInstance {
         error: 'ValidationError',
         issues: error.issues,
       });
+    }
+    // Pass through errors that already carry a 4xx status (e.g. the
+    // 429 from @fastify/rate-limit) instead of flattening them to 500.
+    const statusCode = (error as { statusCode?: number }).statusCode;
+    if (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) {
+      return reply.status(statusCode).send(error);
     }
     request.log.error({ error }, 'Request failed');
     return reply.status(500).send({
@@ -409,7 +436,18 @@ export function buildApp(): FastifyInstance {
 
   // ==================== MESSAGES API ====================
 
-  server.post('/messages', async (request, reply) => {
+  server.post('/messages', {
+    config: {
+      rateLimit: {
+        max: POST_RATE_LIMIT_MAX,
+        timeWindow: POST_RATE_LIMIT_WINDOW,
+        keyGenerator: (req) => {
+          const body = req.body as { userId?: string } | undefined;
+          return body?.userId ?? req.ip;
+        },
+      },
+    },
+  }, async (request, reply) => {
     try {
       const body = PostMessageSchema.parse(request.body);
 

@@ -1,9 +1,8 @@
 import { buildApp } from './app';
 import { checkPortAvailable, checkMigrationDrift } from './preflight';
 
-const server = buildApp();
-
 const start = async () => {
+  const server = await buildApp();
   try {
     const port = parseInt(process.env.PORT || '8080', 10);
     const host = process.env.HOST || '0.0.0.0';

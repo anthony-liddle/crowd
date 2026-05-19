@@ -8,7 +8,7 @@ describe('Health Endpoint', () => {
 
   beforeAll(async () => {
     await setupTestDb();
-    app = createTestApp(getConnectionString()!);
+    app = await createTestApp(getConnectionString()!);
     await app.ready();
   });
 

@@ -1,5 +1,6 @@
 import fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { randomBytes } from 'crypto';
 import { ZodError } from 'zod';
 import {
@@ -22,16 +23,30 @@ import { sql, asc, gt, and, eq, or, inArray, count, isNull } from 'drizzle-orm';
 const CROWD_DURATION_MS = 24 * 60 * 60 * 1000;
 const PROXIMITY_TOKEN_TTL_MS = 5 * 60 * 1000;
 
-export function createTestApp(connectionString: string): FastifyInstance {
+export async function createTestApp(connectionString: string): Promise<FastifyInstance> {
   const pool = new Pool({ connectionString });
   const db = drizzle(pool);
 
   const server = fastify({ logger: false });
 
+  // Mirror the production rate-limit knobs. Read inside the function so
+  // tests can override POST_RATE_LIMIT_MAX / POST_RATE_LIMIT_WINDOW
+  // before each createTestApp() call.
+  const POST_RATE_LIMIT_MAX = parseInt(process.env.POST_RATE_LIMIT_MAX ?? '10', 10);
+  const rawWindow = process.env.POST_RATE_LIMIT_WINDOW ?? '1 minute';
+  const POST_RATE_LIMIT_WINDOW: string | number = /^\d+$/.test(rawWindow)
+    ? parseInt(rawWindow, 10)
+    : rawWindow;
+
   server.register(cors, {
     origin: true,
     credentials: true,
   });
+
+  // Must be awaited so the plugin's onRoute hook is installed before
+  // routes are declared — otherwise per-route `config.rateLimit` is
+  // silently dropped.
+  await server.register(rateLimit, { global: false, hook: 'preHandler' });
 
   // Mirror production's global error handler: Zod validation failures
   // return 400; everything else stays at the existing 500 shape.
@@ -41,6 +56,10 @@ export function createTestApp(connectionString: string): FastifyInstance {
         error: 'ValidationError',
         issues: error.issues,
       });
+    }
+    const statusCode = (error as { statusCode?: number }).statusCode;
+    if (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) {
+      return reply.status(statusCode).send(error);
     }
     const message = error instanceof Error ? error.message : 'Unknown error';
     return reply.status(500).send({ error: 'Internal Server Error', message });
@@ -320,7 +339,18 @@ export function createTestApp(connectionString: string): FastifyInstance {
   });
 
   // Post message
-  server.post('/messages', async (request, reply) => {
+  server.post('/messages', {
+    config: {
+      rateLimit: {
+        max: POST_RATE_LIMIT_MAX,
+        timeWindow: POST_RATE_LIMIT_WINDOW,
+        keyGenerator: (req) => {
+          const body = req.body as { userId?: string } | undefined;
+          return body?.userId ?? req.ip;
+        },
+      },
+    },
+  }, async (request, reply) => {
     try {
       const body = PostMessageSchema.parse(request.body);
 
