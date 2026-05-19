@@ -1,6 +1,7 @@
 import fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { randomBytes } from 'crypto';
+import { ZodError } from 'zod';
 import {
   PostMessageSchema,
   QueryFeedSchema,
@@ -32,6 +33,19 @@ export function createTestApp(connectionString: string): FastifyInstance {
     credentials: true,
   });
 
+  // Mirror production's global error handler: Zod validation failures
+  // return 400; everything else stays at the existing 500 shape.
+  server.setErrorHandler((error, _request, reply) => {
+    if (error instanceof ZodError) {
+      return reply.status(400).send({
+        error: 'ValidationError',
+        issues: error.issues,
+      });
+    }
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ error: 'Internal Server Error', message });
+  });
+
   // Health endpoint
   server.get('/health', async () => {
     return { status: 'ok' };
@@ -59,6 +73,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
 
       return { id: newCrowd.id };
     } catch (err: unknown) {
+      if (err instanceof ZodError) throw err;
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });
     }
@@ -111,6 +126,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
 
       return result;
     } catch (err: unknown) {
+      if (err instanceof ZodError) throw err;
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });
     }
@@ -149,6 +165,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
 
       return { status: 'ok' };
     } catch (err: unknown) {
+      if (err instanceof ZodError) throw err;
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });
     }
@@ -181,6 +198,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
 
       return { token, expiresAt };
     } catch (err: unknown) {
+      if (err instanceof ZodError) throw err;
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });
     }
@@ -220,6 +238,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
         },
       };
     } catch (err: unknown) {
+      if (err instanceof ZodError) throw err;
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });
     }
@@ -275,6 +294,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
         },
       };
     } catch (err: unknown) {
+      if (err instanceof ZodError) throw err;
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });
     }
@@ -293,6 +313,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
 
       return { status: 'ok' };
     } catch (err: unknown) {
+      if (err instanceof ZodError) throw err;
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });
     }
@@ -339,6 +360,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
 
       return { id: newMessage.id };
     } catch (err: unknown) {
+      if (err instanceof ZodError) throw err;
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });
     }
@@ -386,6 +408,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
 
       return { status: 'ok' };
     } catch (err: unknown) {
+      if (err instanceof ZodError) throw err;
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });
     }
@@ -498,6 +521,7 @@ export function createTestApp(connectionString: string): FastifyInstance {
         crowdId: msg.crowdId || undefined,
       }));
     } catch (err: unknown) {
+      if (err instanceof ZodError) throw err;
       const message = err instanceof Error ? err.message : 'Unknown error';
       return reply.status(500).send({ error: 'Internal Server Error', message });
     }

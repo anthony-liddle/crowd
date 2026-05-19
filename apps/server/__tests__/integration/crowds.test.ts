@@ -210,7 +210,7 @@ describe('Crowds API', () => {
         url: '/crowds/lookup',
         payload: { crowdUserIds: [] },
       });
-      expect(response.statusCode).toBe(500); // Zod surfaces as 500 in this handler shape
+      expect(response.statusCode).toBe(400); // Zod validation error
     });
   });
 
@@ -546,7 +546,7 @@ describe('Crowds API', () => {
         url: '/crowds/join-with-token',
         payload: { token: 'short', crowdUserId: randomUuid() },
       });
-      expect(join.statusCode).toBe(500);
+      expect(join.statusCode).toBe(400);
     });
   });
 });
