@@ -1,14 +1,18 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { FastifyInstance } from 'fastify';
-import { setupTestDb, teardownTestDb, getConnectionString } from '../helpers/testDb';
-import { createTestApp } from '../helpers/createApp';
+import { setupTestDb, teardownTestDb, getTestDb } from '../helpers/testDb';
+import { buildApp } from '../../src/app';
 
 describe('Health Endpoint', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
     await setupTestDb();
-    app = await createTestApp(getConnectionString()!);
+    app = await buildApp({
+      db: getTestDb(),
+      cors: { origin: true, credentials: true },
+      logger: false,
+    });
     await app.ready();
   });
 
