@@ -1,0 +1,183 @@
+# Crowd — Decisions and Project Memory
+
+A record of how Crowd got to its current shape. Settled architectural decisions, lessons learned from work that's already shipped, and operational knowledge worth carrying forward.
+
+This document is the historical companion to `docs/followups.md`. The followups doc is the active backlog of what's pending; this doc is the memory of what happened and why.
+
+When something ships and the doing-it is no longer the work, the record of it moves here. The working backlog stays lean.
+
+Last entry added: late-May 2026 (followups/decisions split)
+
+---
+
+## Working principles to keep applying
+
+These emerged from doing the work across all phases. Worth holding onto for any future project, not just Crowd.
+
+- **Verify before remediate.** Prompts and reports describe state; the code is the source of truth. Run the cheap commands that confirm state before acting on described state.
+
+- **Honesty over deferral.** When drift surfaces inside a phase, fix it inside that phase. Booking it for "later" usually means it accumulates with other deferrals into a thorny pile.
+
+- **Treat described state as hypothesis.** Whether the source is a prompt, a previous report, or your own mental model, "what's true now" needs verification. Cheap verification beats building on a wrong assumption.
+
+- **Don't expand the testing surface inside cleanup phases.** "Fix or delete what exists" is the rule; standing up new test infrastructure is its own piece of work that deserves dedicated attention.
+
+- **Migration filenames are part of the deploy timeline.** Rename auto-generated names to read like changelog entries. Codified in CONTRIBUTING.md.
+
+- **The continue-on-error round-trip pattern.** When you have to land a known-broken state to enable later work, gate it explicitly with a comment naming the next phase that removes it. Future-you grepping for `continue-on-error` finds the trail.
+
+- **Layer of testing matters.** Test behavior at the layer the contract lives, not below it. HTTP integration tests beat ORM-layer assertions because the HTTP boundary is what consumers depend on; the ORM is an implementation choice that can change.
+
+- **Job independence over CI minutes.** A failing job's name should tell you specifically what's broken. Don't merge separate concerns into one job to save CI time; useful redundancy is worth its cost.
+
+- **Verify the diagnosis before applying the fix.** Phase C5's "What I got wrong" surfaced this: pushing a fix without confirming it actually addresses the symptom (e.g., bundle still had unresolved require()) costs a round-trip. Cheap verification commands like grep against the built artifact would have caught the issue on iteration zero.
+
+- **Instrument first, fix second on hard bugs.** When a hypothesis-driven fix doesn't resolve a symptom, the next move isn't another hypothesis. It's adding diagnostic logs to find ground truth. The QR scan saga went through two iterations of guessing at modal stacking before instrumentation revealed the actual mechanism (three Modals churning lifecycle events in 32ms, not two). The instrument-first iteration would have been cheaper than the two guess-first iterations combined.
+
+- **Designs that resist simple explanation are usually unfinished.** The identity model went through four iterations before settling on "globalUserId for the global feed, crowd-specific IDs for everything Crowds, each lives only as long as its purpose does." That sentence is the test of whether the design has settled. Earlier iterations couldn't be summarized that cleanly because they had unresolved tensions.
+
+---
+
+## Onboarding readiness review (May 2026)
+
+A codebase review was completed. The review applied three lenses (clean / makes sense / well-documented) and produced findings categorized by severity.
+
+Fixed in the highest-value-hour pass:
+- Root README setup section reconciled with current reality (per-app `.env.example` files, `pnpm dev:up` + `pnpm dev:seed` path, explicit `apps/mobile/.env` requirement)
+- PostGIS claims removed from `apps/server/README.md`
+- `apps/mobile/.env.example` default flipped to the dev backend URL so a fresh checkout works on a physical device out of the box
+
+Subsequently completed in the deferred documentation pass:
+
+- `docs/design-system.md` created — the Ember design system documented with light/dark tokens, type ramp, spatial primitives, depth model, and a "known drift" section
+- `apps/mobile/PROJECT_STRUCTURE.md` deleted and the root README pointer removed
+- `apps/mobile/README.md` rewritten with Crowd-specific content (Ember pointer, identity model pointer, deep link pointer, `.env` requirement)
+- `.notes/` moved to `docs/archive/` with "snapshot, not current" headers on each file
+- `docs/README.md` created as a navigation hub for the docs/ directory
+- `apps/mobile/src/screens/_DesignTest.tsx` annotated with a top-of-file JSDoc explaining its purpose
+- Misleading TODO in `apps/mobile/src/services/api.ts:37` reworded to accurately describe `DEFAULT_LOCATION`'s current role
+- `CONTRIBUTING.md` placeholder repo URL fixed (`yourusername` → `anthony-liddle`)
+- `proximity_tokens` table added to the schema section of `apps/server/README.md`
+
+The `### Documentation accuracy` subsection under Technical follow-ups was removed after all items shipped.
+
+---
+
+## Crowd Feed bugs (Phase B testing surfaced, addressed in fix-pass)
+
+Status: fixed in the post-Phase-B fix-pass. Listed here for completeness.
+
+- Ring tick rate too coarse under 60 seconds (now adaptive: 1s/10s/30s based on min remaining time across visible posts)
+- Expired posts didn't disappear until next fetch (now client-side filtered in addition to server-side)
+- 5 km reach cap was UI-only; schema accepted up to 100 km (now `.max(5000)` at the schema level)
+- Lifespan cap was UI-only; schema accepted up to 7 days (now `.min(5).max(720)` at the schema level)
+
+---
+
+## Stale-location bug (real-world testing surfaced, addressed in fix-pass)
+
+Status: fixed in the stale-location fix-pass. Listed here for completeness.
+
+- `useLocation` mount-time capture meant post submission used coordinates from when the screen mounted, not when the user tapped Post — could be hours stale after backgrounding. Real privacy issue (post broadcasts from where user *was*, not where they are).
+- Fix: new explicit `getFreshLocation()` async method on the hook with discriminated-union return type. Submit handler awaits a fresh location with a 5-second timeout and 30-second staleness threshold. Three-state submit machine (idle / locating / submitting). 1-second-delayed "Locating..." label so fast fetches don't flicker.
+- Same pattern applied to FeedScreen cold-open: skeleton + Concentric + "Finding posts near you..." while waiting; "Can't find you" retry block on failure.
+- Toast for transient errors, native iOS Alert with "Open Settings" affordance for permission_denied.
+- Discovered: the existing FeedScreen `loadMessages` previously called `getMessages(undefined)` when location was absent, returning data without coords. New code hard-errors instead. Aligned with the privacy reasoning.
+
+---
+
+## Crowds design pass (mid-May 2026)
+
+Status: largely shipped. The design pass produced the populated Crowds list redesign, refined Create and Join modals, the QR scan flow, and the proximity-token server endpoints.
+
+Followups specifically from this pass:
+
+- ~~**QR generation flow on the Invite button.**~~ Shipped in the testing-blockers fix-pass. Open crowds use Share.share(); private crowds open a `PrivateInviteSheet` modal with QR + countdown + regenerate button. Both work end-to-end.
+- ~~**Lookup-token endpoint for pre-join confirmation.**~~ Shipped. `POST /crowds/lookup-token` returns crowd metadata without consuming the token.
+- ~~**Crowd-specific user-id rotation when joining via token.**~~ Replaced entirely by the four-iteration identity model rearchitecture (see below).
+- ~~**Server tests for proximity token endpoints.**~~ Added. 7 new tests cover owner mint, non-owner reject, lookup idempotency, single-use consume, backdated-expiry reject, unknown token, malformed payload.
+
+---
+
+## Identity model rearchitecture (May 2026, four iterations on PR #68)
+
+Status: settled. The final design has clean separation between globalUserId (for the global feed only, rotates with content) and crowd-specific IDs (per crowd, stable for the membership's lifetime, survive globalUserId rotation, purged on leave or expiration).
+
+The arc:
+
+- **Round 1 (original):** crowd-specific IDs for memberships with N+1 fetch on `getMyCrowds` and a misguided create-then-leave-rejoin sequence that broke private crowd creation entirely.
+- **Round 2:** simplified to mainUserId everywhere — broke the rotation privacy property (memberships died when globalUserId rotated, which it does whenever content runs out).
+- **Round 3:** restored crowd-specific IDs for memberships with a bulk-lookup endpoint, but kept ownership tied to mainUserId — meant users lost owner status on their own crowds when they rotated.
+- **Round 4 (final):** clean separation. globalUserId for the global feed only. Crowd-specific IDs for ownership, membership, message authorship, getMyCrowds — everything in the Crowds domain. IDs purged on leave (immediate) and on crowd expiration (lazy, via lookup response cross-reference). Server has zero awareness of globalUserId in any Crowds endpoint.
+
+The privacy properties that survive: rotation across globalUserId remains intact (a user's global feed activity isn't linkable across rotation). Cross-crowd unlinkability of message authorship is preserved (each crowd uses a different ID for message authoring). The privacy property that's deliberately abandoned: memberships within a single device are linkable to each other in the database via shared crowd-specific IDs over a crowd's lifetime — but that's bounded by the crowd's 24-hour lifespan, and the only place the linkage between a user's various crowd identities exists is on the device.
+
+What worked about the iteration process: each round taught us something the previous couldn't see. Round 1 surfaced the broken rejoin pattern. Round 2 surfaced the rotation property we hadn't been protecting. Round 3 surfaced the ownership-tied-to-rotating-id problem. Round 4 settled. Designing the final shape upfront wasn't possible because the constraints weren't all visible until the work surfaced them.
+
+---
+
+## Testing-blockers fix-pass (May 2026)
+
+Status: shipped. Three real bugs surfaced from initial real-device testing with a partner.
+
+- **Keyboard covered Create modal input.** Fixed by wrapping CreateCrowdModal and JoinCrowdModal in `KeyboardAvoidingView` with iOS padding behavior.
+- **Open-crowd Invite share flow.** Built `PrivateInviteSheet` for private crowds (QR code + countdown + regenerate). Open crowds use `Share.share()` with the invite link. Bug 2 from the original brief ("creator not added to private crowds") turned out to be a misread of the Invite-button-doesn't-work symptom; once Fix 3 landed, the underlying complaint resolved.
+- **Parser robustness.** `parseCrowdInvite` now tolerates trailing slashes on both `crowd://join/<id>/` and the `cid` query value of token URLs. 10 new unit tests cover the variants.
+
+---
+
+## QR scan modal-stacking saga (PR #69 → PR #70)
+
+Status: settled. Documented here at length because the lessons compound.
+
+**The bug:** scanning a QR code for a private crowd bypassed the confirmation modal and froze the app on the Crowds screen. Membership never landed server-side.
+
+**PR #69 (didn't work):** modal-stacking diagnosis with a 350ms defer between scanner dismissal and confirmation modal presentation. Reasonable hypothesis based on observable symptoms; merged after passing real-device verification on the dev's setup. Real-device testing with a partner showed the symptom persisted after merge.
+
+**The diagnostic instrumentation pass:** added structured `[QR-SCAN]` console logs at every state transition in the scan flow. Real-device repro with the instrumented build gave a clear timeline.
+
+**The actual mechanism:** three Modals all changed lifecycle state in 32ms. The main `JoinCrowdModal` dismissed (because confirmation took its place in the visibility expression), the scanner Modal dismissed (because the scan was complete), and the confirmation Modal tried to present. iOS dropped the third presentation. PR #69's defer protected against scanner-vs-confirmation racing but didn't address main-vs-confirmation racing because they were both triggered by the same setState call.
+
+**PR #70 (the structural fix):** rewrote `JoinCrowdModal` as a state machine with one Modal that internally swaps views (`scanning | looking-up | confirming | joining-* | idle`). State transitions don't involve Modal lifecycle; they're just React renders inside one persistent Modal. The iOS mechanism that dropped the third presentation has nothing to act on.
+
+**Lessons that compound:**
+
+- The instrument-first principle was added to the working principles list above. Two iterations of "fix based on hypothesis" cost more than one iteration of "instrument, observe, fix" would have. Worth remembering on any future bug where a hypothesis-driven fix doesn't resolve the symptom.
+- iOS Modal lifecycle is a real abstraction with real failure modes. Multi-Modal coordination via state flags is structurally fragile because React batches state updates and iOS expects sequential lifecycle events. The structural answer is "one Modal with internal state" rather than "multiple coordinated Modals." Apply this pattern preemptively to any future flow that has a lookup-confirm-consume shape.
+
+---
+
+## Deep linking and invite share flow
+
+> **Status:** shipped. Both send side (Invite button, PR landed earlier) and receive side (`crowd://` deep links, PR #71, May 2026) are in production. The section preserves the original "what's needed" framing as a historical record of the work that was done.
+
+Currently the invite link `crowd://join/<id>` is shared via Share.share() but isn't tappable: tapping it from outside the app doesn't open the app because the URL scheme isn't registered.
+
+The send side (Invite button generates and shares) is now built. The receive side (tapping a `crowd://` URL opens the app and routes to the right screen) is not.
+
+What's needed:
+
+- Add `"scheme": "crowd"` to `app.json`.
+- Wire React Navigation's `linking` config to route `crowd://join/:id` and `crowd://join-token/:token` to the appropriate screens.
+- Handle cold launch (app not running), warm launch (app backgrounded), app-already-in-different-state (e.g., user is mid-create when a deep link arrives), malformed URLs, nonexistent crowds, expired tokens.
+- Use the same confirmation flow as the QR scan path (the unified `JoinCrowdModal` state machine handles this naturally — deep link entry just sets the initial state to `looking-up` instead of `scanning`).
+
+Realistic estimate: 2-3 hours including testing. The receive side is now smaller than the previous estimate because the unified Modal eliminates a lot of the "where does the deep link land?" routing ambiguity.
+
+Universal Links / App Links (`https://crowd.app/...`) are a separate, larger piece of work for production. Custom scheme is fine for dev and TestFlight.
+
+---
+
+## Local development environment yak-shave observations (May 2026)
+
+Surfaced during the QR scan diagnostic work. Filed here so future-you doesn't re-discover them.
+
+- **Docker compose holds port 8080 if you started it earlier.** When `pnpm dev:server` (which runs `tsx watch`) tries to start, it silently fails to bind because Docker is already on the port. The dev server's logs may not surface this clearly. Symptom: `lsof -i :8080` shows `com.docke` listening, not `node`. Recovery: `lsof -ti :8080 | xargs kill -9` then restart `pnpm dev:server`. Worth adding a startup check to the dev script that fails loudly if 8080 is already taken.
+- **Local DB schema can be stale relative to source code.** Running migrations is a manual step (`pnpm migrate` from `apps/server`). When you pull a branch with new migrations, you need to run them locally before the dev server can serve those endpoints. Symptom: queries return "Failed query: select ... from <table>" with truncated error messages. Worth adding a startup check to the dev server that compares applied migrations against expected migrations and warns on drift.
+- **Expo env files belong in `apps/mobile/`, not the repo root.** The repo root `.env` is read by the server and devtools (which use dotenv directly), but Expo doesn't look there. Mobile builds need their own `apps/mobile/.env`. Without it, `EXPO_PUBLIC_API_URL` falls back to whatever default the source code has (currently `http://localhost:8080` which doesn't work from a phone). Worth either (a) configuring Expo to read the root `.env` or (b) creating `apps/mobile/.env` and gitignoring it consistently.
+- **Fail-loud instead of localhost-fallback.** The current code defaults to `http://localhost:8080` if `EXPO_PUBLIC_API_URL` is missing. From a phone, localhost is the phone itself, which produces "Network request failed" errors with no clear cause. Fail-loud (throw at startup, or render an error screen) would be more debuggable. Small fix; worth doing.
+- **iOS platform versions can lag the phone's OS.** When iOS auto-updates the phone past what Xcode's installed platforms cover, dev builds fail with "iOS X.Y is not installed." Fix is to download the matching platform via Xcode → Settings → Components. Sometimes Xcode itself needs updating first (App Store).
+- **Provisioning profiles need attention on first build per environment.** First time you build to a physical device on a new dev environment, Xcode needs to generate a provisioning profile. Open the project in Xcode (`open apps/mobile/ios/Crowd.xcworkspace`), Signing & Capabilities tab, ensure team is selected and "Automatically manage signing" is on. One-time setup per machine.
+- **Dev build vs TestFlight build coexistence.** They use the same bundle identifier. Installing one over the other is fine; running both at once on the same device isn't.
+
+These are all real-world problems future-you will hit if working on multiple machines or after long breaks. Worth a "Local development setup" doc that walks through them, or just keep this list updated.
