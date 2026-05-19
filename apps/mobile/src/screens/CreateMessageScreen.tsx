@@ -14,6 +14,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Controller, useForm } from 'react-hook-form';
 import Toast from 'react-native-toast-message';
 import { useColorScheme } from 'nativewind';
+import { ValidationError } from '@repo/api';
 import { createMessage, getMyCrowds } from '@/services/api';
 import { CreateMessagePayload, Crowd, FeedSource, TabNavigationProp } from '@/types';
 import { useLocation, LocationFetchError } from '@/hooks/useLocation';
@@ -95,7 +96,7 @@ export const CreateMessageScreen: React.FC = () => {
     }, [loadCrowds])
   );
 
-  const { control, handleSubmit, reset, watch } = useForm<FormData>({
+  const { control, handleSubmit, reset, watch, setError, clearErrors, formState } = useForm<FormData>({
     defaultValues: { text: '', reachKm: 1, lifespanMin: 60 },
   });
 
@@ -160,6 +161,7 @@ export const CreateMessageScreen: React.FC = () => {
     }
 
     setSubmitState('submitting');
+    clearErrors();
     try {
       const payload: CreateMessagePayload = {
         text: data.text.trim(),
@@ -178,7 +180,23 @@ export const CreateMessageScreen: React.FC = () => {
       }, 400);
     } catch (error) {
       console.error('Error creating message:', error);
-      Toast.show({ type: 'error', text1: 'Failed to post', text2: 'Try again.' });
+      if (error instanceof ValidationError) {
+        // Server fields (text, latitude, longitude, radiusMeters,
+        // activeMinutes) don't all map to form fields — only `text` is
+        // user-editable here. Match it inline; toast anything else so the
+        // user still sees the failure even if it's a slider/GPS-derived
+        // field they can't fix in this screen.
+        const textIssue = error.messageFor('text');
+        if (textIssue) {
+          setError('text', { type: 'server', message: textIssue });
+        }
+        const unmatched = error.issues.filter((issue) => issue.path[0] !== 'text');
+        if (unmatched.length > 0) {
+          Toast.show({ type: 'error', text1: 'Failed to post', text2: unmatched[0].message });
+        }
+      } else {
+        Toast.show({ type: 'error', text1: 'Failed to post', text2: 'Try again.' });
+      }
     } finally {
       setSubmitState('idle');
     }
@@ -229,7 +247,10 @@ export const CreateMessageScreen: React.FC = () => {
                   selectionColor={selectionColor}
                   multiline
                   value={value}
-                  onChangeText={onChange}
+                  onChangeText={(next) => {
+                    if (formState.errors.text) clearErrors('text');
+                    onChange(next);
+                  }}
                   maxLength={MAX_TEXT_LENGTH}
                   className="font-serif text-compose text-ink dark:text-ink-d"
                   style={{ minHeight: 80, textAlignVertical: 'top' }}
@@ -241,6 +262,14 @@ export const CreateMessageScreen: React.FC = () => {
               limit={MAX_TEXT_LENGTH}
               style={{ marginTop: 6 }}
             />
+            {formState.errors.text?.message ? (
+              <Text
+                className="font-sans text-meta text-ember-warn dark:text-ember-warn-d"
+                style={{ marginTop: 4 }}
+              >
+                {formState.errors.text.message}
+              </Text>
+            ) : null}
           </View>
 
           {/* Reach + lifespan preview */}
