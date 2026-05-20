@@ -7,6 +7,8 @@ import {
   deleteCrowdUserId,
   updateRotationClock,
   getRotationClock,
+  rotateGlobalIdentityNow,
+  clearAllCrowdUserIds,
 } from '../../src/utils/identity';
 
 // Mock uuid to return predictable values
@@ -174,6 +176,42 @@ describe('identity utils', () => {
       // Should still be later time (not updated)
       const stored = await SecureStore.getItemAsync('crowd_rotation_clock');
       expect(stored).toBe(laterTime.toISOString());
+    });
+  });
+
+  describe('rotateGlobalIdentityNow', () => {
+    it('mints a new UUID, writes it under the user-id key, and clears the rotation clock', async () => {
+      await SecureStore.setItemAsync('crowd_user_id', 'old-id');
+      await SecureStore.setItemAsync(
+        'crowd_rotation_clock',
+        new Date(Date.now() + 3600000).toISOString(),
+      );
+
+      const newId = await rotateGlobalIdentityNow();
+
+      expect(newId).toBeDefined();
+      expect(newId).not.toBe('old-id');
+      expect(await SecureStore.getItemAsync('crowd_user_id')).toBe(newId);
+      expect(await SecureStore.getItemAsync('crowd_rotation_clock')).toBeNull();
+    });
+  });
+
+  describe('clearAllCrowdUserIds', () => {
+    it('wipes the entire crowd-IDs map', async () => {
+      await SecureStore.setItemAsync(
+        'crowd_user_ids',
+        JSON.stringify({ 'crowd-A': 'a', 'crowd-B': 'b' }),
+      );
+
+      await clearAllCrowdUserIds();
+
+      const stored = await SecureStore.getItemAsync('crowd_user_ids');
+      expect(stored).toBeNull();
+      expect(await getAllCrowdUserIds()).toEqual({});
+    });
+
+    it('is a no-op when nothing stored', async () => {
+      await expect(clearAllCrowdUserIds()).resolves.not.toThrow();
     });
   });
 

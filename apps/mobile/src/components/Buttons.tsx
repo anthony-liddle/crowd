@@ -33,6 +33,23 @@ export function QuietButton({ label, ...props }: ButtonProps) {
   );
 }
 
+// Destructive: outlined like QuietButton, but warn-toned border and
+// label. Reserved for actions that delete or otherwise can't be
+// undone. Uses accent rather than fill so it stays Ember-quiet next to
+// the rest of the surface.
+export function DestructiveButton({ label, ...props }: ButtonProps) {
+  return (
+    <Pressable
+      className="border border-warn dark:border-warn-d rounded-md py-3.5 items-center active:opacity-60"
+      {...props}
+    >
+      <Text className="text-warn dark:text-warn-d font-sans-medium text-body">
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 // Inline: text-only, ember-colored. For in-context actions.
 export function InlineButton({ label, ...props }: ButtonProps) {
   return (

@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { FeedScreen } from '@/screens/FeedScreen';
 import { CreateMessageScreen } from '@/screens/CreateMessageScreen';
 import { CrowdsScreen } from '@/screens/CrowdsScreen';
+import { YouScreen } from '@/screens/YouScreen';
 import { TabBar } from '@/components/TabBar';
 
 const Tab = createBottomTabNavigator();
@@ -16,6 +17,7 @@ export const TabNavigator: React.FC = () => {
       <Tab.Screen name="Feed" component={FeedScreen} />
       <Tab.Screen name="Post" component={CreateMessageScreen} />
       <Tab.Screen name="Crowds" component={CrowdsScreen} />
+      <Tab.Screen name="You" component={YouScreen} />
     </Tab.Navigator>
   );
 };

@@ -62,6 +62,22 @@ const TabIcon: React.FC<IconProps> = ({ name, color }) => {
       </Svg>
     );
   }
+  if (name === 'You') {
+    // Head over shoulders — single-figure silhouette matching the
+    // hand-drawn weight of the other tab icons.
+    return (
+      <Svg {...common}>
+        <Circle cx={12} cy={9} r={3} stroke={color} strokeWidth={ICON_STROKE} />
+        <Path
+          d="M5 19 C5 15.5 8 13.5 12 13.5 C16 13.5 19 15.5 19 19"
+          stroke={color}
+          strokeWidth={ICON_STROKE}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </Svg>
+    );
+  }
   return null;
 };
 

@@ -6,7 +6,7 @@ This document is the historical companion to `docs/followups.md`. The followups 
 
 When something ships and the doing-it is no longer the work, the record of it moves here. The working backlog stays lean.
 
-Last entry added: late-May 2026 (source-direct workspace exports)
+Last entry added: late-May 2026 (You tab and Clear my data)
 
 ---
 
@@ -373,3 +373,56 @@ Plus the pre-build line in the Dockerfile's dev target. The build and prod stage
 - **Source-direct exposes latent code that compiled output hides.** The `process.env` reference in `packages/api/src/client.ts` worked in every current consumer because each had ambient `process` in some form (Node has it, Vite substitutes it, Metro's babel handles it). It's not strictly isomorphic — filed as a small followup. Worth knowing: switching from compiled to source consumption tends to surface this kind of environment dependency.
 
 - **Composite project references are coupled to dist-based consumption.** Removing one without the other produces "stale tsbuildinfo" workarounds. The `packages/shared/tsconfig.json` still has `composite: true` but nothing orchestrates it anymore; filed as a small followup to drop. Not urgent, but a real piece of orphaned config.
+
+---
+
+## You tab and Clear my data (late-May 2026)
+
+The followups doc had carried a Settings/preferences screen item since the Ember migration. It shipped as the **You** tab: a fourth bottom-tab surface showing identity rotation status, location permission, app version and native build number, and a Clear my data action. The arc spanned a server endpoint (`POST /users/delete`, deployed to Fly) and the mobile screen consuming it.
+
+### Soft-wipe semantics (Option B)
+
+The endpoint implements a soft wipe rather than a hard delete. For the user's own messages:
+
+- Messages with zero remaining boosts are deleted outright.
+- Messages still boosted by other users have `ownerId` set to NULL. They survive as anonymous orphan posts with their text and location intact.
+
+Boosts the user themselves issued are deleted, and the parent message's `boostCount` is decremented in lockstep so the denormalized counter stays honest. All crowd memberships keyed to any of the user's UUIDs are removed.
+
+The principle: take down the user's own attribution, preserve what the community is carrying. Crowd's purpose is sharing information others depend on. Warnings that other users have chosen to amplify (by boosting) are information the community has already invested in carrying. Wiping the original poster's attribution honors the privacy request without destroying that community-level value.
+
+### Owned-crowd handling (orphan, both open and private)
+
+Crowds the user owns are not deleted. The user's own membership row is removed by the general memberships sweep, and the crowd row plus its `ownerId` are left intact. The `ownerId` becomes a UUID no longer held by any device.
+
+The first instinct was different: delete private crowds the user owns, on a "compromised owner, close the door" security rationale. That was reversed. Deleting a crowd destroys other members' posts and information they may be relying on, for an app whose whole purpose is sharing information others depend on. The owner wiping their data is a statement about the owner's safety, not the crowd's integrity. From the members' side, an owner who wipes is just an owner who stopped posting and stopped inviting, which is a survivable state. Orphaning costs at most "no new invites for the rest of the crowd's 24h life." Deleting costs "the coordination space and its information disappear for everyone." Orphaning is the lower-harm option and is consistent with the soft-wipe principle already chosen for messages.
+
+A load-bearing fact surfaced in discovery and informs how the orphaning behaves: `crowds.ownerId` is read at two sites. `/crowds/:id/proximity-token` is owner-only (it gates whether a token can be minted at all), and `/crowds/lookup` computes `canInvite = crowd.isOpen || isOwner`. For **private** crowds (`isOpen=false`) those two combine to mean: only the owner can invite, by any mechanism. An orphaned private crowd therefore cannot issue new invites for the rest of its 24h lifetime. This is accepted and intended; the crowd serves its existing members until natural expiration. Note that today the only person who could ever invite to a private crowd is the owner anyway, so an owner who wipes leaves nobody worse off on the invite axis than they already were. **Open** crowds are essentially unaffected by orphaning, since anyone can join by ID without an owner.
+
+### EXISTS over denormalized counters
+
+The anonymize-vs-delete branch reads authoritative boost-row state via `EXISTS` against the post-deletion `message_boosts` table, not the denormalized `boostCount` column and not a (total - deleted) subtraction. The reasoning: the delete-vs-anonymize decision must read real row state so it can't be fooled by counter drift. `boostCount` is maintained correctly for the messages that survive, but it is not the source of truth for the branching decision.
+
+An interaction test proves the case that catches counter-based implementations: a message owned by the wiping user, boosted by both the wiping user (via a second wipe-set UUID) and an external user. The user's own boost is deleted, the external boost survives, and the message anonymizes correctly. A naive (total-deleted) check would route this to delete and FK-violate against the surviving boost row; the EXISTS predicate routes it to anonymize as intended.
+
+### Trust model
+
+The delete endpoint inherits the project's existing trust model: it trusts the UUIDs in the body with no signature or token, identical to every other endpoint. Anyone submitting a delete must already hold the UUID, which is a device-local SecureStore secret. Worst case is self-DoS of one's own data. The endpoint header comment names this explicitly so future readers don't add ceremony that isn't called for.
+
+### Mobile-side local reset ordering
+
+On server success, local state is reset in this order: `clearAllCrowdUserIds()` then `rotateGlobalIdentityNow()`. The rotate helper internally calls `clearAllRecords()`, so the AsyncStorage records get wiped as part of it; no separate call is needed. The order matters for a narrow window: if global were rotated first, the device would briefly hold a fresh global UUID alongside stale crowd UUIDs, and any inflight crowd request could leak via a stale identifier the server has already dropped. Clearing crowd IDs first closes that window.
+
+On server failure, no local state is touched. A partial wipe (local cleared but server delete failed) would orphan the device from data still attributed to those UUIDs on the server, with no way to ever re-issue the delete. The user keeps every UUID and can retry. The endpoint is idempotent under retry.
+
+**Lessons worth carrying forward:**
+
+- **The right principle for destructive actions on shared infrastructure is "take down attribution, preserve community-carried value," not "delete everything attributable."** The reflex to delete-everything is symmetric and easier to reason about, but it externalizes harm to other users. The soft-wipe split (delete what is purely the user's, anonymize what others have invested in) takes more code but produces the right outcome.
+
+- **Read real row state for branching decisions, not denormalized counters.** Counters drift. EXISTS predicates against the actual table cannot. When the choice between two outcomes (delete vs. anonymize) is load-bearing, the cost of reading the authoritative state is trivial compared to the cost of getting fooled by a stale counter.
+
+- **Verify what columns gate before assuming they're inert.** The first sketch of this work assumed `crowds.ownerId` was set at create-time and never read for anything load-bearing. A read-only verification pass found two real authorization paths gated on it, which changed the framing of the owned-crowd discussion from "harmless orphan" to "real but acceptable tradeoff." The verification cost was twenty minutes; landing the orphan without that knowledge would have been a quiet footgun.
+
+- **Honest copy beats marketing copy on privacy surfaces.** The You tab's identity-status copy went through several iterations because the rotation clock is a lower bound, not a literal countdown. The shipped wording uses "after your last post expires" and "once you next use the app" to acknowledge that rotation is conditional on activity rather than a wall-clock event. Privacy surfaces in particular should not promise more than the system actually delivers.
+
+- **Reversals are part of the design conversation, not a failure of it.** The owned-crowd handling went from "delete private crowds" to "orphan everything" mid-arc, based on whose harm was being optimized for. Recording both the original instinct and the reversal preserves the reasoning for whoever revisits this later.

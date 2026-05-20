@@ -2,6 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import * as Location from 'expo-location';
 import { Location as LocationType } from '@/types/location';
 
+export type LocationPermissionStatus = 'granted' | 'denied' | 'undetermined';
+
+/**
+ * Read-only foreground permission read. Three buckets matches how
+ * every existing call site treats the status (`!== 'granted'` is the
+ * single non-granted bucket); the You tab needs to display the value
+ * but never prompts from this path.
+ */
+export const getLocationPermissionStatus = async (): Promise<LocationPermissionStatus> => {
+  const { status } = await Location.getForegroundPermissionsAsync();
+  if (status === 'granted') return 'granted';
+  if (status === 'denied') return 'denied';
+  return 'undetermined';
+};
+
 export type LocationFetchError = 'timeout' | 'permission_denied' | 'gps_unavailable';
 
 export type LocationResult =

@@ -11,6 +11,7 @@ export type RootTabParamList = {
   // inside CrowdsScreen via parseCrowdInvite so QR/paste/deep-link share one
   // parser. Cleared after consumption.
   Crowds: { pendingInvite?: string } | undefined;
+  You: undefined;
 };
 
 /**
