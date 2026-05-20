@@ -121,6 +121,7 @@ Concrete components that embody Ember well, useful as references:
 - **CrowdCard** — a true card. Tinted background (paper-tint for owned, paper-2 for joined), full border (rule normally, ember when expiring), `rounded-md` radius. The dark-mode equivalents preserve the same three-tier lift.
 - **JoinCrowdModal** — the unified Modal state machine (per PR #70). Multiple internal views share the same paper-grounded shell; state transitions happen inside one Modal rather than across many.
 - **PrivateInviteSheet** — QR code on paper, ember Ring counting down, ember regenerate button. Demonstrates how ephemeral artifacts are visualized.
+- **DestructiveButton** — outlined like QuietButton (same shape, same padding, same radius, same `active:opacity-60`), but `border-warn dark:border-warn-d` and `text-warn dark:text-warn-d`. No saturated fill. Establishes the project's warn-button vocabulary: the destructive signal comes from accent placement on border and label, not luminance. Reserved for actions that delete or otherwise can't be undone. First use is the Clear my data action on the You tab; `warn` is already the token the system reserves for destructive actions.
 
 ## Spacing and radii
 
@@ -143,7 +144,7 @@ Radii are standardized:
 Ember has no shadows. Depth and separation are achieved by:
 
 - **Lifted backgrounds.** The paper → paper-2 → paper-tint progression (and its dark-mode equivalent) is how surfaces appear to stack.
-- **Rule borders.** Subtle 1px borders in the rule color separate adjacent surfaces.
+- **Rule borders.** Subtle 1px borders in the rule color separate adjacent surfaces. Footgun worth naming once: React Native's default border color is opaque black, not the rule token, so inline `borderTopWidth: 1` without a matching `borderTopColor` (or a `border-rule dark:border-rule-d` className on the same view) renders as a near-black hairline in both modes. Either pair the inline width with `borderColor: c.rule` from the component's `COLORS` map, or co-locate a NativeWind class on the same view. Caught once on the You screen and fixed; no other site in the codebase is affected today.
 
 This is a deliberate property of the system. Paper doesn't cast the kind of shadow that a card-on-glass design language implies. Surfaces in Ember sit at different heights of the same warm material, separated by quiet rules.
 
@@ -190,5 +191,5 @@ Honesty about what isn't quite consistent yet:
 - **Ember-soft translucent fills.** Three close-but-not-equal alphas appear across Concentric and CrowdCard for the "expiring soon" ember background. Worth tokenizing as `ember-soft` / `ember-soft-d`.
 - **PrivateInviteSheet uses off-palette hex values** for the QR code's color and backgroundColor props. Could be intentional QR-contrast tuning or copy-paste drift; worth confirming and either tokenizing the deviation or aligning with the palette.
 - **Inline pixel font sizes** exist in several components alongside the named ramp. Worth tightening to use the ramp tokens consistently.
-- **The Leave button doesn't use the `warn` token** despite `warn` being described in the tokens file as reserved for destructive actions. Currently uses the same QuietButton style as Invite.
+- **The Leave button doesn't use the `warn` token** despite `warn` being described in the tokens file as reserved for destructive actions. Currently uses the same QuietButton style as Invite. The resolution path now exists: swap to `DestructiveButton`, which is the canonical warn-as-accent treatment. Not yet done; tracked here rather than in followups because it's a one-line component swap.
 - **One documented intentional override:** Concentric overrides `rule` to use `dust-2`'s hex instead, with a comment explaining the higher-contrast need in negative space. This is the only documented deviation; everything else above is undocumented drift.

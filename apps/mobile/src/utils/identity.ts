@@ -64,6 +64,54 @@ export const getOrGenerateGlobalUserId = async (): Promise<string> => {
   }
 };
 
+/**
+ * Read the device's current global UUID without minting a new one if
+ * none exists. Returns null when the device has never generated a
+ * global identity. Use this when a caller needs to know the current
+ * identity for an external operation (e.g. the "Clear my data"
+ * server call) without triggering the watermark rotation path inside
+ * `getOrGenerateGlobalUserId`.
+ */
+export const getStoredGlobalUserId = async (): Promise<string | null> => {
+  try {
+    return await SecureStore.getItemAsync(USER_ID_KEY);
+  } catch (error) {
+    console.error('Error reading global user identity:', error);
+    return null;
+  }
+};
+
+/**
+ * Imperative version of the watermark-driven rotation that
+ * `getOrGenerateGlobalUserId` runs internally when the rotation clock
+ * passes. Mints a fresh UUID, writes it under the existing user-id
+ * key, deletes the rotation clock, and clears local message/boost
+ * records — exactly the steps inside the natural rotation branch so
+ * behavior is identical. Used by the "Clear my data" flow on the You
+ * tab; not appropriate for general use elsewhere.
+ */
+export const rotateGlobalIdentityNow = async (): Promise<string> => {
+  const userId = uuidv4();
+  await SecureStore.setItemAsync(USER_ID_KEY, userId);
+  await SecureStore.deleteItemAsync(ROTATION_CLOCK_KEY);
+  await clearAllRecords();
+  return userId;
+};
+
+/**
+ * Wipe every crowd-specific UUID from the device. Used by the "Clear
+ * my data" flow; the existing single-crowd `deleteCrowdUserId` is the
+ * right tool for leave-one-crowd. After this runs, `getMyCrowds`
+ * returns an empty array (its short-circuit on an empty map).
+ */
+export const clearAllCrowdUserIds = async (): Promise<void> => {
+  try {
+    await SecureStore.deleteItemAsync(CROWD_USER_IDS_KEY);
+  } catch (error) {
+    console.error('Error clearing crowd user identities:', error);
+  }
+};
+
 const readCrowdUserIdMap = async (): Promise<Record<string, string>> => {
   const stored = await SecureStore.getItemAsync(CROWD_USER_IDS_KEY);
   if (!stored) return {};

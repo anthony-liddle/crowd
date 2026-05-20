@@ -4,7 +4,7 @@ The working backlog of what's pending. Lean by design — when items ship, they 
 
 For working principles, historical decisions, and lessons from completed work, see `docs/decisions.md`.
 
-Last updated: late-May 2026 (source-direct exports shipped).
+Last updated: late-May 2026 (You tab and Clear my data shipped).
 
 ---
 
@@ -41,7 +41,6 @@ When the strong-soft blockers are addressed (or you decide they don't apply), th
 These were intentionally out of scope for the design migration but will need attention as the app matures.
 
 - **Post-detail screen.** When a user taps a post, what do they see? Privacy-aware design: should show context without revealing exact origin coordinates. A relative-distance diagram, not a map pin.
-- **Settings/preferences screen.** Doesn't exist yet. Will need: location permission status, notification preferences (when notifications exist), identity rotation, app version, sign out / wipe data.
 - **Error/loading states beyond toast.** Today: toasts for everything. Better: empty states for failure modes, inline retry affordances, contextual error messages. (Partially addressed in stale-location fix: FeedScreen now has a "Can't find you" retry block; CreateMessageScreen has the locating state machine.)
 - **NFC tap flow.** Currently a "coming soon" modal with honest copy. Adding `react-native-nfc-manager` requires switching to a dev client (which the project effectively now uses for local builds, so the dev-client switch is no longer the blocker it was) and adding iOS NFC entitlements. When implemented, fold into the unified `JoinCrowdModal` state machine alongside the QR flow rather than as a sibling Modal.
 - **Onboarding / first-launch identity rotation UX.** Currently identity is generated silently on first launch. Worth a real "this is what anonymous means here" first-launch screen, especially given the now-coherent two-tier identity model (globalUserId + crowd-specific IDs). The user should understand what each is for.
@@ -100,7 +99,6 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 
 ### Repo hygiene observations
 
-- **Build-before-typecheck pattern.** Same root cause as the source-direct exports item above. Every new CI step that touches workspace types has to remember the prereqs. The Vercel build command is verbose because of it. Fixed structurally by switching to source-direct workspace exports.
 - **`pnpm.packageExtensions` and `.npmrc public-hoist-pattern[]=*@babel/*`.** Load-bearing for the React Native build. Documented in CONTRIBUTING.md as "don't delete these without reading this." If a new contributor strips them, Metro breaks.
 - **`vite.config.ts process.env shim`.** `define: { 'process.env': {} }` is load-bearing for some dependency that does a runtime check. Devtools' own consumer code correctly uses `import.meta.env`, but if anyone adds a new dependency that reads `process.env` at runtime, it'll silently get `{}`. Comment-on-line in a future cleanup.
 - **PR-merge path now exercised.** PRs #68, #69, and #70 went through the full PR review and merge cycle, so the deploy workflows are validated for that path.
