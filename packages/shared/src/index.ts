@@ -11,6 +11,7 @@ export {
   CreateProximityTokenSchema,
   JoinWithTokenSchema,
   LookupTokenSchema,
+  DeleteUserDataSchema,
   // Response schemas for API client validation
   MessageResponseSchema,
   CrowdResponseSchema,
@@ -19,6 +20,7 @@ export {
   ProximityTokenResponseSchema,
   JoinWithTokenResponseSchema,
   LookupTokenResponseSchema,
+  DeleteUserDataResponseSchema,
   type PostMessageDto,
   type QueryFeedDto,
   type MessageDto,
@@ -39,5 +41,7 @@ export {
   type ProximityTokenResponse,
   type JoinWithTokenResponse,
   type LookupTokenResponse,
+  type DeleteUserDataDto,
+  type DeleteUserDataResponse,
 } from './schemas';
 

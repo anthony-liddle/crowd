@@ -15,6 +15,7 @@ import {
   CreateProximityTokenSchema,
   JoinWithTokenSchema,
   LookupTokenSchema,
+  DeleteUserDataSchema,
 } from '@repo/shared';
 import { db as defaultDb } from './db/index';
 import { messages, messageBoosts, crowds, crowdMemberships, proximityTokens } from './db/schema';
@@ -443,6 +444,117 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     } catch (err: any) {
       if (err instanceof ZodError) throw err;
       request.log.error({ msg: 'Leave Crowd Failed', error: err });
+      return reply.status(500).send({
+        error: 'Internal Server Error',
+        message: err.message,
+      });
+    }
+  });
+
+  // ==================== USER DATA WIPE ====================
+
+  // Delete every server-side trace of attribution for the supplied UUIDs.
+  // Trust model: inherits the project's pseudonymous design — the endpoint
+  // trusts the UUIDs in the body with no signature or token, exactly like
+  // every other endpoint. Anyone submitting a delete must already hold the
+  // UUID, which is a device-local SecureStore secret; worst case is a
+  // self-DoS of one's own data.
+  //
+  // Semantics (soft wipe, Option B):
+  //   1. Boosts BY the user are deleted; affected messages' boostCount is
+  //      decremented to stay in sync with messageBoosts.
+  //   2. The user's messages with no remaining boosts (by others) are
+  //      deleted. Messages still boosted by others have ownerId set to NULL
+  //      and survive as anonymous orphan posts — text and location intact
+  //      so the community continues to carry the information. The column
+  //      is intentionally nullable for exactly this state.
+  //   3. crowdMemberships rows for the user's UUIDs are removed.
+  //   4. Crowds the user OWNS are left standing. The ownerId is NOT
+  //      touched. Consequence for private crowds specifically: ownerId is
+  //      load-bearing for /crowds/:id/proximity-token (owner-only) and the
+  //      `canInvite` flag in /crowds/lookup, so an orphaned private crowd
+  //      cannot issue new invites for the rest of its 24h life. This is
+  //      intended — the crowd serves its existing members until natural
+  //      expiration. Open crowds are unaffected since anyone can join by ID.
+  server.post('/users/delete', async (request, reply) => {
+    try {
+      const body = DeleteUserDataSchema.parse(request.body);
+      const userIds = body.userIds;
+
+      const result = await db.transaction(async (tx) => {
+        // 1. Delete the user's own boosts. Returning the affected
+        //    messageIds lets us decrement boostCount in lockstep instead
+        //    of recomputing from a count(*) per message.
+        const deletedBoosts = await tx
+          .delete(messageBoosts)
+          .where(inArray(messageBoosts.userId, userIds))
+          .returning({ messageId: messageBoosts.messageId });
+
+        const decrementsByMessage = new Map<string, number>();
+        for (const b of deletedBoosts) {
+          decrementsByMessage.set(
+            b.messageId,
+            (decrementsByMessage.get(b.messageId) ?? 0) + 1,
+          );
+        }
+        for (const [messageId, n] of decrementsByMessage) {
+          await tx
+            .update(messages)
+            .set({ boostCount: sql`${messages.boostCount} - ${n}` })
+            .where(eq(messages.id, messageId));
+        }
+
+        // 2. Anonymize messages that still have boosts (by others). The
+        //    EXISTS predicate runs against the post-step-1 boost table, so
+        //    "still has boosts" means "boosted by someone outside the
+        //    wiping set."
+        const anonymized = await tx
+          .update(messages)
+          .set({ ownerId: null })
+          .where(
+            and(
+              inArray(messages.ownerId, userIds),
+              sql`EXISTS (SELECT 1 FROM ${messageBoosts} WHERE ${messageBoosts.messageId} = ${messages.id})`,
+            ),
+          )
+          .returning({ id: messages.id });
+
+        // 3. Delete messages with no remaining boosts. The NOT EXISTS
+        //    guard sidesteps the missing ON DELETE CASCADE on
+        //    messageBoosts.messageId — a message with surviving boost
+        //    rows would FK-violate. After step 2, those messages are
+        //    already anonymized, so the two branches partition cleanly.
+        const deletedMessages = await tx
+          .delete(messages)
+          .where(
+            and(
+              inArray(messages.ownerId, userIds),
+              sql`NOT EXISTS (SELECT 1 FROM ${messageBoosts} WHERE ${messageBoosts.messageId} = ${messages.id})`,
+            ),
+          )
+          .returning({ id: messages.id });
+
+        // 4. Remove crowd memberships keyed by any of the user's UUIDs.
+        //    Owned crowds are intentionally left untouched (see the
+        //    endpoint header comment).
+        const deletedMemberships = await tx
+          .delete(crowdMemberships)
+          .where(inArray(crowdMemberships.userId, userIds))
+          .returning({ id: crowdMemberships.id });
+
+        return {
+          status: 'ok',
+          messagesDeleted: deletedMessages.length,
+          messagesAnonymized: anonymized.length,
+          boostsDeleted: deletedBoosts.length,
+          membershipsRemoved: deletedMemberships.length,
+        };
+      });
+
+      return result;
+    } catch (err: any) {
+      if (err instanceof ZodError) throw err;
+      request.log.error({ msg: 'Delete User Data Failed', error: err });
       return reply.status(500).send({
         error: 'Internal Server Error',
         message: err.message,

@@ -16,6 +16,8 @@ import type {
   ProximityTokenResponse,
   JoinWithTokenResponse,
   LookupTokenResponse,
+  DeleteUserDataDto,
+  DeleteUserDataResponse,
 } from '@repo/shared';
 import * as Shared from '@repo/shared';
 import { z, ZodError } from 'zod';
@@ -191,6 +193,19 @@ class ApiClient {
         parsed,
         30000,
         Shared.LookupTokenResponseSchema,
+      );
+    },
+  };
+
+  public users = {
+    deleteData: async (data: DeleteUserDataDto): Promise<DeleteUserDataResponse> => {
+      const parsed = parseRequest(Shared.DeleteUserDataSchema, data);
+      return this.request<DeleteUserDataResponse>(
+        '/users/delete',
+        'POST',
+        parsed,
+        30000,
+        Shared.DeleteUserDataResponseSchema,
       );
     },
   };

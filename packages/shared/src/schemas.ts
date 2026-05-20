@@ -98,6 +98,21 @@ export const LookupTokenSchema = z.object({
   token: z.string().min(16).max(128),
 });
 
+// Wipe-by-UUID request. Caller submits every UUID they hold (global +
+// per-crowd) so the server can take down all of their attribution in one
+// transaction. See `/users/delete` for the soft-wipe semantics.
+export const DeleteUserDataSchema = z.object({
+  userIds: z.array(z.string().uuid()).min(1),
+});
+
+export const DeleteUserDataResponseSchema = z.object({
+  status: z.string(),
+  messagesDeleted: z.number().int(),
+  messagesAnonymized: z.number().int(),
+  boostsDeleted: z.number().int(),
+  membershipsRemoved: z.number().int(),
+});
+
 export const LookupTokenResponseSchema = z.object({
   crowd: z.object({
     id: z.string().uuid(),
@@ -182,3 +197,5 @@ export type LookupTokenDto = z.infer<typeof LookupTokenSchema>;
 export type ProximityTokenResponse = z.infer<typeof ProximityTokenResponseSchema>;
 export type JoinWithTokenResponse = z.infer<typeof JoinWithTokenResponseSchema>;
 export type LookupTokenResponse = z.infer<typeof LookupTokenResponseSchema>;
+export type DeleteUserDataDto = z.infer<typeof DeleteUserDataSchema>;
+export type DeleteUserDataResponse = z.infer<typeof DeleteUserDataResponseSchema>;
