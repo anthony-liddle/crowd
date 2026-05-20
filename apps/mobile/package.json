@@ -10,8 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "eas-build-post-install": "cd ../.. && pnpm --filter @repo/shared build && pnpm --filter @repo/api build"
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@babel/runtime": "^7.29.2",

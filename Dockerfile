@@ -20,10 +20,6 @@ RUN pnpm install --frozen-lockfile
 # ---------- dev: hot-reload target used by docker-compose ----------
 FROM deps AS dev
 
-# The server imports @repo/shared via its built dist/index.js, so shared must
-# be compiled before tsx watch can resolve it.
-RUN pnpm --filter @repo/shared build
-
 EXPOSE 8080
 
 WORKDIR /app/apps/server

@@ -6,7 +6,7 @@ This document is the historical companion to `docs/followups.md`. The followups 
 
 When something ships and the doing-it is no longer the work, the record of it moves here. The working backlog stays lean.
 
-Last entry added: late-May 2026 (testDb.ts migration drift fix)
+Last entry added: late-May 2026 (source-direct workspace exports)
 
 ---
 
@@ -322,3 +322,54 @@ Verification used a temporary probe inside `setupTestDb()` to confirm `__drizzle
 - **Temporary probes are clean for proof-of-fix.** For changes where the success criterion isn't visible from the public API (an index exists, a migration ran, an env var was read), a temporary check inserted into the relevant code path is more honest than just running existing tests and saying "looks fine." Add the check, confirm the result, remove the check. The change set stays clean and the verification was real.
 
 - **The "drift" framing in followups entries should imply urgency proportional to evidence.** This entry sat in followups for months with the same wording. The morning's createApp.ts work and the schemas dedup were the first two incidents that turned an abstract concern into concrete evidence. By the time this fix landed, the drift had bitten three times — but the entry's framing in followups never changed to reflect that. Worth being more aggressive about updating followups entries when concrete incidents appear, rather than letting them ride at their original framing.
+
+---
+
+## Source-direct workspace exports (May 2026)
+
+For months, every CI step that touched workspace types had to remember to run `pnpm --filter @repo/shared build && pnpm --filter @repo/api build` first. The pattern bit at least four times across Phase A/C work: failed typecheck runs, Vercel build failures, EAS post-install hooks, Dockerfile pre-build steps. The followups entry filed this as a class of bug that the `exports` field with TS resolution would structurally eliminate.
+
+The fix: add a conditional `exports` block to `packages/shared/package.json` and `packages/api/package.json`. The shape:
+
+```json
+"exports": {
+  ".": {
+    "types": "./src/index.ts",
+    "development": "./src/index.ts",
+    "react-native": "./src/index.ts",
+    "browser": "./src/index.ts",
+    "default": "./dist/index.js"
+  }
+}
+```
+
+TypeScript reads `types` first; Vite dev and Vitest match `development`; Metro matches `react-native`; Vite production builds match `browser`; Node in production runs `default` (the compiled `dist/`). The conditions are ordered most-specific to most-general — order matters in the `exports` field.
+
+The plan called for three conditions (`types`/`development`/`default`); reality needed five. Vite production builds and Metro have their own conditions that the original three didn't match. Worth knowing for future packages: the conditional exports pattern wants explicit conditions for each consumer environment, not just dev/types/default.
+
+**Three scope expansions beyond the plan, each required to make source-direct actually work:**
+
+- **tsconfig moduleResolution changes.** The plan said don't touch consumer tsconfigs. TypeScript itself emitted the diagnostic: `moduleResolution: "node"` (legacy) doesn't honor the `exports` field. `packages/api/tsconfig.json` and `apps/server/tsconfig.json` switched to `Node16`; `apps/mobile/tsconfig.json` switched to `bundler`. Without these, the entire premise of the change fails.
+
+- **Project reference removal.** The plan said leave composite/references alone. `packages/api/tsconfig.json`'s `references: [{ path: "../shared" }]` was load-bearing for the old dist-orchestrated build: composite project references force TypeScript to look for emitted `.d.ts` files (TS6305), which directly defeats source-direct. Removed.
+
+- **Additional types declaration.** `apps/devtools/tsconfig.app.json` needed `"node"` added to `types` because source-direct surfaced a latent `process.env` reference in `packages/api/src/client.ts` that dist isolation had been hiding.
+
+**Three workarounds got deleted:**
+- The `commonjsOptions.include` block in `apps/devtools/vite.config.ts` (with its long comment explaining why it existed).
+- The "Build packages" pre-steps in `.github/workflows/test.yml` typecheck and test-mobile jobs (the build job's still-needed pre-step stays).
+- The `eas-build-post-install` script in `apps/mobile/package.json`.
+
+Plus the pre-build line in the Dockerfile's dev target. The build and prod stages still produce/copy `dist` because production runs `node dist/index.js`.
+
+**Verification was thorough:** clean-state `pnpm -r typecheck` passes without any prior build, all test suites pass (64 + 38 + 26 + 57 = 185 tests across the workspaces), Vite dev and build both clean, Expo's Metro bundles produce a valid iOS export, the server's `tsx` dev path resolves to source and the `node` prod path resolves to dist. Server integration tests and `docker build` couldn't run locally (Docker daemon absent) but the changes to those paths are minimal and CI runs them.
+
+**Lessons worth carrying forward:**
+
+- **Plans constrain hypotheses, not reality.** Three scope expansions were necessary in this work, each because the plan's assumption ("don't touch X") was based on a hypothesis that turned out to be wrong. The right call is to adjust scope when reality disagrees, with the reasoning visible in the stop report — not to pretend the original scope worked, and not to silently bail.
+
+- **Conditional exports want one condition per consumer environment.** The minimal shape (types/default) covers TypeScript and Node. The full shape needs `development` for Vite/Vitest dev, `react-native` for Metro, `browser` for Vite production builds. Future packages should start with the full set; adding conditions later means re-verifying every consumer.
+
+- **Source-direct exposes latent code that compiled output hides.** The `process.env` reference in `packages/api/src/client.ts` worked in every current consumer because each had ambient `process` in some form (Node has it, Vite substitutes it, Metro's babel handles it). It's not strictly isomorphic — filed as a small followup. Worth knowing: switching from compiled to source consumption tends to surface this kind of environment dependency.
+
+- **Composite project references are coupled to dist-based consumption.** Removing one without the other produces "stale tsbuildinfo" workarounds. The `packages/shared/tsconfig.json` still has `composite: true` but nothing orchestrates it anymore; filed as a small followup to drop. Not urgent, but a real piece of orphaned config.
