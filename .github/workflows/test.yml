@@ -66,8 +66,6 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install
-      - name: Build packages (so workspace consumers can resolve types)
-        run: pnpm --filter @repo/shared build && pnpm --filter @repo/api build
       - name: Typecheck all workspaces
         run: pnpm -r typecheck
 
@@ -83,8 +81,6 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install
-      - name: Build packages (so workspace consumers can resolve types)
-        run: pnpm --filter @repo/shared build && pnpm --filter @repo/api build
       - name: Test apps/mobile
         run: pnpm --filter @app/mobile test
       - name: Typecheck apps/mobile

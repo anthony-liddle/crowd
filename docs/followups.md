@@ -4,7 +4,7 @@ The working backlog of what's pending. Lean by design — when items ship, they 
 
 For working principles, historical decisions, and lessons from completed work, see `docs/decisions.md`.
 
-Last updated: late-May 2026 (field-level errors + testDb migration runner shipped).
+Last updated: late-May 2026 (source-direct exports shipped).
 
 ---
 
@@ -73,9 +73,10 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 
 ### Build and dependency hygiene
 
-- **Source-direct workspace exports.** Workspaces consume each other via compiled `dist/` (`@repo/shared`, `@repo/api` have `"main": "dist/index.js"`). Every CI step that touches workspace types has to remember to run the build first; we hit this pattern bug at least three times in Phase A and again in Phase C's Vercel build. The clean fix is the `exports` field with TS resolution, or publishing ESM. This eliminates a class of "I forgot to build first" bugs.
 - **Phantom-dependency audit.** The Zod 3-vs-4 split in Phase A was an unused dep affecting hoisting. Suspect more exist. Run `depcheck` or `knip` across the monorepo. Standalone follow-up, not gated to any phase.
 - **`packages/api` CJS-only emit.** Works but is the older module format. ESM migration of the workspace would simplify Rollup's job in devtools and eliminate the `commonjsOptions` config entirely. Cross-cutting (server consumes shared directly), so this is a real piece of work.
+- **`process.env` reference in `packages/api/src/client.ts`.** Source-direct workspace exports surfaced a latent environment dependency that compiled output was hiding. The current code works in every consumer (Vite substitutes `process.env`, Node has it natively, Metro's babel handles it via the env preset), but it's not strictly isomorphic — the package presents as portable code while quietly requiring an ambient `process` object. Probably worth replacing with an explicit config-passed-in pattern when next touched. Not blocking; the code works today.
+- **`composite: true` in `packages/shared/tsconfig.json` is orphaned.** Removed during source-direct migration: `packages/api/tsconfig.json`'s `references: [{ path: "../shared" }]` was forcing TypeScript to look for emitted `.d.ts` files, defeating source-direct. The reference is gone, but `composite: true` in the shared package itself remains and nothing now orchestrates it. Practical effect: `tsbuildinfo` can go stale, requiring `rm -f packages/{shared,api}/tsconfig.tsbuildinfo` if a `tsc` run appears to do nothing. Fix is dropping `composite: true`. One-line change, low priority.
 
 ### Server-side defense in depth
 
