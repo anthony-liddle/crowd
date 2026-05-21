@@ -4,7 +4,7 @@ import { useColorScheme } from 'nativewind';
 import Toast from 'react-native-toast-message';
 import { Crowd } from '@/types';
 import { formatTimeRemaining, getCrowdUrgency, CrowdUrgency } from '@/utils/formatters';
-import { QuietButton } from './Buttons';
+import { QuietButton, DestructiveButton } from './Buttons';
 import { LockIcon, OpenLinesIcon } from './icons';
 import { PrivateInviteSheet } from './PrivateInviteSheet';
 
@@ -101,11 +101,11 @@ export const CrowdCard: React.FC<CrowdCardProps> = ({ crowd, onLeave }) => {
       <View className="flex-row" style={{ gap: 8 }}>
         {crowd.canInvite && (
           <View className="flex-1">
-            <QuietButton label="Invite" onPress={handleInvite} />
+            <QuietButton label="Invite" tone="card" onPress={handleInvite} />
           </View>
         )}
         <View className="flex-1">
-          <QuietButton label="Leave" onPress={() => onLeave(crowd)} />
+          <DestructiveButton label="Leave" onPress={() => onLeave(crowd)} />
         </View>
       </View>
       {!crowd.isOpen && (
