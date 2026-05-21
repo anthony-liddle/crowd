@@ -4,10 +4,10 @@
     "jsx": "react-native",
     "moduleResolution": "bundler",
     "esModuleInterop": true,
-    "baseUrl": ".",
+    "types": ["jest"],
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ]
     }
   },
