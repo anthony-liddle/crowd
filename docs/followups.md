@@ -4,7 +4,7 @@ The working backlog of what's pending. Lean by design — when items ship, they 
 
 For working principles, historical decisions, and lessons from completed work, see `docs/decisions.md`.
 
-Last updated: late-May 2026 (You tab and Clear my data shipped).
+Last updated: late-May 2026 (You tab and Clear my data shipped; accuracy-threshold defense investigated and set aside).
 
 ---
 
@@ -79,7 +79,7 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 
 ### Server-side defense in depth
 
-- **Accuracy threshold in post validation.** GPS readings carry an `accuracy` field (radius of confidence in meters). A 0.1 km post with ±500 m accuracy is essentially randomly geotagged. Reject readings where `accuracy > radiusMeters / 2` (so a 100m post needs ±50m or better; a 5km post is happy with ±2.5km). Worth implementing once we have data on what real-world accuracy distributions look like.
+- **Accuracy threshold in post validation.** Investigated and set aside as a security defense. The proposed rule (`accuracy > radiusMeters / 2`) inverts under its own threat model — a spoofer fabricates the whole payload including the accuracy value, so it sails through; the rule only catches honest users with a genuinely poor GPS fix, and its binding cases (small radii) fail exactly in Crowd's core environments (dense crowds, indoors, urban canyons). See `docs/decisions.md` → "Accuracy threshold on POST /messages (investigated, not shipping)" for the full reasoning. If location-accuracy is ever revisited, the honest shapes are a client-side soft warning (a user-help nudge, not a defense) or plumb accuracy through and persist it without acting on it, then pick any threshold from real data.
 
 ### Deploy and CI
 
