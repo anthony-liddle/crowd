@@ -19,11 +19,24 @@ export function PrimaryButton({ label, ...props }: ButtonProps) {
   );
 }
 
+interface QuietButtonProps extends ButtonProps {
+  // 'card' lifts the border from rule to dust-2 so the button reads
+  // clearly when sitting on a paper-2 or paper-tint card background,
+  // where rule's contrast collapses. Same precedent the design doc
+  // names for Concentric overriding rule with dust-2 in negative
+  // space. Default behavior on paper-base surfaces is unchanged.
+  tone?: 'default' | 'card';
+}
+
 // Quiet: outlined, transparent. Secondary actions like "Join a crowd".
-export function QuietButton({ label, ...props }: ButtonProps) {
+export function QuietButton({ label, tone = 'default', ...props }: QuietButtonProps) {
+  const borderClass =
+    tone === 'card'
+      ? 'border-dust-2 dark:border-dust-2-d'
+      : 'border-rule dark:border-rule-d';
   return (
     <Pressable
-      className="border border-rule dark:border-rule-d rounded-md py-3.5 items-center active:opacity-60"
+      className={`border ${borderClass} rounded-md py-3.5 items-center active:opacity-60`}
       {...props}
     >
       <Text className="text-ink dark:text-ink-d font-sans text-body">
