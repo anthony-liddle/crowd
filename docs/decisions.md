@@ -6,7 +6,7 @@ This document is the historical companion to `docs/followups.md`. The followups 
 
 When something ships and the doing-it is no longer the work, the record of it moves here. The working backlog stays lean.
 
-Last entry added: late-May 2026 (You tab and Clear my data)
+Last entry added: late-May 2026 (accuracy-threshold defense on POST /messages: investigated, not shipping)
 
 ---
 
@@ -424,5 +424,19 @@ On server failure, no local state is touched. A partial wipe (local cleared but 
 - **Verify what columns gate before assuming they're inert.** The first sketch of this work assumed `crowds.ownerId` was set at create-time and never read for anything load-bearing. A read-only verification pass found two real authorization paths gated on it, which changed the framing of the owned-crowd discussion from "harmless orphan" to "real but acceptable tradeoff." The verification cost was twenty minutes; landing the orphan without that knowledge would have been a quiet footgun.
 
 - **Honest copy beats marketing copy on privacy surfaces.** The You tab's identity-status copy went through several iterations because the rotation clock is a lower bound, not a literal countdown. The shipped wording uses "after your last post expires" and "once you next use the app" to acknowledge that rotation is conditional on activity rather than a wall-clock event. Privacy surfaces in particular should not promise more than the system actually delivers.
+
+---
+
+## Accuracy threshold on POST /messages (late-May 2026, investigated, not shipping)
+
+The followups doc had carried "accuracy threshold in post validation" as the next defense beyond the POST /messages rate-limit. The proposed rule: reject when `accuracy > radiusMeters / 2`, so a 100m post would need ±50m or better and a 5km post would tolerate ±2.5km. A read-only discovery pass examined whether to build it. The conclusion is not to, framed as a security feature.
+
+The rule inverts under its own threat model. A spoofer doesn't have to fight accuracy — they fabricate the entire payload, including the accuracy value, and the check sails through. The only person the rule actually catches is an honest user whose device returned a genuinely poor fix. It taxes legitimate posts and does nothing to the attacker it was meant to stop.
+
+The harm also lands precisely wrong for Crowd. The rule's binding cases are at small radii: a 100m post would need ±50m, a 200m post would need ±100m. Those are exactly the accuracy regimes that fail in dense protest crowds, indoor venues, and urban canyons — Crowd's core environments. The mechanism that's supposed to defend the app would silently reject important posts in the app's most important moments.
+
+Ground-truth notes from discovery worth recording. Accuracy is not currently plumbed past `useLocation.ts` — `expo-location` returns `coords.accuracy`, but the hook projects only `{ latitude, longitude }` into `LocationType`. It's absent from `PostMessageSchema`, absent from the request body, and there's no `accuracy` column on `messages`. Any version of this check would be a four-workspace change (mobile hook, compose call site, shared schema, server route), not a server-only edit. And because nothing persists accuracy today, there's no historical data to calibrate any threshold against.
+
+Not building it as a security feature. If location-accuracy is ever revisited, the honest shapes are (a) a client-side soft warning when the fix looks poor relative to the chosen radius — explicitly a user-help nudge, not a defense — or (b) plumb accuracy through and persist it without acting on it, then pick any threshold from real-world data rather than a heuristic. Both deferred; neither needed now.
 
 - **Reversals are part of the design conversation, not a failure of it.** The owned-crowd handling went from "delete private crowds" to "orphan everything" mid-arc, based on whose harm was being optimized for. Recording both the original instinct and the reversal preserves the reasoning for whoever revisits this later.
