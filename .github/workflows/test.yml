@@ -85,6 +85,8 @@ jobs:
         run: pnpm --filter @app/mobile test
       - name: Typecheck apps/mobile
         run: pnpm --filter @app/mobile exec tsc --noEmit
+      - name: Check Expo SDK compatibility
+        run: pnpm --filter @app/mobile exec expo install --check
 
   build:
     name: Build All
