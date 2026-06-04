@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
-import { useRelaySettings } from '@/hooks/useRelaySettings';
 import { PrimaryButton, QuietButton } from './Buttons';
 
 interface RelaySheetProps {
@@ -10,14 +9,6 @@ interface RelaySheetProps {
 }
 
 export function RelaySheet({ visible, onClose, onConfirm }: RelaySheetProps) {
-  const { confirmDontAskAgain } = useRelaySettings();
-  const [dontAskAgain, setDontAskAgain] = useState(true);
-
-  const handleRelay = async () => {
-    if (dontAskAgain) await confirmDontAskAgain();
-    onConfirm();
-  };
-
   return (
     <Modal
       visible={visible}
@@ -49,48 +40,18 @@ export function RelaySheet({ visible, onClose, onConfirm }: RelaySheetProps) {
             The original radius doesn&rsquo;t change; you&rsquo;re just adding a new
             point it can reach from.
           </Text>
-          <Pressable
-            onPress={() => setDontAskAgain(!dontAskAgain)}
-            className="flex-row items-center mb-4"
-            style={{ gap: 10 }}
+          <Text
+            className="font-sans text-dust dark:text-dust-d mb-4"
+            style={{ fontSize: 12 }}
           >
-            <View
-              className={
-                dontAskAgain
-                  ? 'bg-ember dark:bg-ember-d border-ember dark:border-ember-d'
-                  : 'border-rule dark:border-rule-d'
-              }
-              style={{
-                width: 16,
-                height: 16,
-                borderWidth: 1.5,
-                borderRadius: 3,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {dontAskAgain && (
-                <Text
-                  className="text-on-ember dark:text-on-ember-d"
-                  style={{ fontSize: 10, fontWeight: '600', lineHeight: 12 }}
-                >
-                  ✓
-                </Text>
-              )}
-            </View>
-            <Text
-              className="font-sans text-dust dark:text-dust-d"
-              style={{ fontSize: 12 }}
-            >
-              Don&rsquo;t ask again. Use long-press to relay.
-            </Text>
-          </Pressable>
+            Once it&rsquo;s relayed, you can&rsquo;t undo it.
+          </Text>
           <View className="flex-row" style={{ gap: 10 }}>
             <View className="flex-1">
               <QuietButton label="Cancel" onPress={onClose} />
             </View>
             <View className="flex-1">
-              <PrimaryButton label="Relay" onPress={handleRelay} />
+              <PrimaryButton label="Relay" onPress={onConfirm} />
             </View>
           </View>
         </Pressable>
