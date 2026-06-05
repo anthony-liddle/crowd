@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, FlatList, RefreshControl } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import Toast from 'react-native-toast-message';
 import { Message, Crowd, FeedSource, TabNavigationProp } from '@/types';
 import { getMessages, boostMessage, getMyCrowds } from '@/services/api';
@@ -14,7 +15,6 @@ import { PrimaryButton } from '@/components/Buttons';
 import { RelaySheet } from '@/components/RelaySheet';
 import { FeedSourceSelector } from '@/components/FeedSourceSelector';
 import { useLocation, LocationFetchError } from '@/hooks/useLocation';
-import { useRelaySettings } from '@/hooks/useRelaySettings';
 import { useThemedRefreshTint } from '@/hooks/useThemedRefreshTint';
 
 type SortBy = 'nearest' | 'soonest';
@@ -40,7 +40,6 @@ export const FeedScreen: React.FC = () => {
   const [selectedFeed, setSelectedFeed] = useState<FeedSource>({ id: null, name: 'Global' });
 
   const [sheetMessage, setSheetMessage] = useState<Message | null>(null);
-  const { markRelayed } = useRelaySettings();
 
   // Filter out posts that hit zero — server already excludes them on the next
   // refetch, but state lingers between fetches. Without this, a post sits at
@@ -139,27 +138,21 @@ export const FeedScreen: React.FC = () => {
       });
       return;
     }
-    // Mark the gesture taught locally before the network round-trip — the hint
-    // is teaching state, not server state. Awaiting boostMessage first opens a
-    // window where useRelaySettings re-renders with stale `hasRelayedAtLeastOnce`
-    // and the hint flashes back into view.
-    await markRelayed();
     try {
       await boostMessage(message.id, message.expiresAt, {
         latitude: result.location.latitude,
         longitude: result.location.longitude,
         crowdId: selectedFeed.id || undefined,
       });
+      // Confirm the deliberate, one-way action with a single medium impact —
+      // fired only once the boost has actually landed on the server.
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       Toast.show({ type: 'success', text1: 'Relayed', text2: 'Now visible to people near you.' });
       loadMessages();
     } catch (error) {
       Toast.show({ type: 'error', text1: 'Relay failed', text2: 'Could not relay this post.' });
     }
-  }, [getFreshLocation, selectedFeed, markRelayed, loadMessages]);
-
-  const handleRelay = useCallback((message: Message) => {
-    performRelay(message);
-  }, [performRelay]);
+  }, [getFreshLocation, selectedFeed, loadMessages]);
 
   const handleShowRelaySheet = useCallback((message: Message) => {
     setSheetMessage(message);
@@ -254,7 +247,6 @@ export const FeedScreen: React.FC = () => {
           <PostCard
             message={item}
             now={now}
-            onRelay={handleRelay}
             onShowRelaySheet={handleShowRelaySheet}
           />
         )}

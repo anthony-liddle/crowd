@@ -2,7 +2,7 @@
  * Ember design system component gallery.
  *
  * Unrouted by design — not part of the production navigation tree. Renders
- * key Ember primitives (Concentric, Ring, ReachPreview, buttons, RelayControl,
+ * key Ember primitives (Concentric, Ring, ReachPreview, buttons, RelayButton,
  * RelaySheet) at representative states for reference during development.
  *
  * To exercise: temporarily add to TabNavigator, or import directly in a screen
@@ -16,10 +16,9 @@ import { Ring } from '@/components/Ring';
 import { Concentric } from '@/components/Concentric';
 import { ReachPreview } from '@/components/ReachPreview';
 import { PrimaryButton, QuietButton, InlineButton } from '@/components/Buttons';
-import { RelayControl } from '@/components/RelayControl';
+import { RelayButton } from '@/components/RelayButton';
 import { RelaySheet } from '@/components/RelaySheet';
 import { ThemedSlider } from '@/components/ThemedSlider';
-import { useRelaySettings } from '@/hooks/useRelaySettings';
 import { OnboardingScreen } from '@/screens/OnboardingScreen';
 
 export const DesignTestScreen: React.FC = () => {
@@ -30,7 +29,6 @@ export const DesignTestScreen: React.FC = () => {
   const [onboardingMode, setOnboardingMode] = useState<
     'first-launch' | 'reference' | null
   >(null);
-  const { reset: resetRelaySettings } = useRelaySettings();
 
   return (
     <ScrollView
@@ -88,23 +86,29 @@ export const DesignTestScreen: React.FC = () => {
           </View>
         </Section>
 
-        <Section label="Relay control">
-          <View className="flex-row items-center" style={{ gap: 24 }}>
-            <RelayControl
-              count={relayCount}
-              onRelay={() => setRelayCount((n) => n + 1)}
-              onShowSheet={() => setSheetVisible(true)}
-            />
-            <InlineButton
-              label="reset relays"
-              onPress={async () => {
-                await resetRelaySettings();
-                setRelayCount(0);
-              }}
-            />
+        <Section label="Relay button">
+          <View className="flex-row items-start" style={{ gap: 32 }}>
+            <View style={{ alignItems: 'center', gap: 6 }}>
+              <RelayButton
+                count={relayCount}
+                isBoosted={false}
+                isOwner={false}
+                onPress={() => setSheetVisible(true)}
+              />
+              <Caption>boostable</Caption>
+            </View>
+            <View style={{ alignItems: 'center', gap: 6 }}>
+              <RelayButton count={4} isBoosted isOwner={false} onPress={() => {}} />
+              <Caption>boosted by me</Caption>
+            </View>
+            <View style={{ alignItems: 'center', gap: 6 }}>
+              <RelayButton count={2} isBoosted={false} isOwner onPress={() => {}} />
+              <Caption>own post (count only)</Caption>
+            </View>
           </View>
           <Caption>
-            Tap before first confirm opens the sheet. Long-press after confirm relays.
+            Tap the boostable tile to open the confirm sheet; confirming bumps the
+            count.
           </Caption>
         </Section>
 
