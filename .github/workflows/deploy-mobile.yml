@@ -4,6 +4,11 @@
 # selecting the `main` branch, to spend a build from the monthly Expo cap
 # on main's current commit. Pushes to main no longer trigger a build.
 #
+# Ref guard: the build job runs only when the dispatched ref is main
+# (`if: github.ref == 'refs/heads/main'`). A dispatch from any other branch
+# is skipped, so the App Store Connect / Expo secrets only ever flow into a
+# build of reviewed main-branch code.
+#
 # Concurrency: at most one mobile build runs at a time; a second run
 # queues until the first finishes.
 #
@@ -28,6 +33,7 @@ on:
 jobs:
   build:
     name: Build and submit to TestFlight
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency: deploy-mobile
     steps:
