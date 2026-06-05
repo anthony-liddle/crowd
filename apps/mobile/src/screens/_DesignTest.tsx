@@ -11,7 +11,7 @@
  * See docs/design-system.md for the system this gallery represents.
  */
 import React, { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Modal, ScrollView, Text, View } from 'react-native';
 import { Ring } from '@/components/Ring';
 import { Concentric } from '@/components/Concentric';
 import { ReachPreview } from '@/components/ReachPreview';
@@ -20,12 +20,16 @@ import { RelayControl } from '@/components/RelayControl';
 import { RelaySheet } from '@/components/RelaySheet';
 import { ThemedSlider } from '@/components/ThemedSlider';
 import { useRelaySettings } from '@/hooks/useRelaySettings';
+import { OnboardingScreen } from '@/screens/OnboardingScreen';
 
 export const DesignTestScreen: React.FC = () => {
   const [reachKm, setReachKm] = useState(2.5);
   const [lifespanMin, setLifespanMin] = useState(60);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [relayCount, setRelayCount] = useState(0);
+  const [onboardingMode, setOnboardingMode] = useState<
+    'first-launch' | 'reference' | null
+  >(null);
   const { reset: resetRelaySettings } = useRelaySettings();
 
   return (
@@ -103,6 +107,23 @@ export const DesignTestScreen: React.FC = () => {
             Tap before first confirm opens the sheet. Long-press after confirm relays.
           </Caption>
         </Section>
+
+        <Section label="Onboarding">
+          <View style={{ gap: 10 }}>
+            <InlineButton
+              label="first-launch mode"
+              onPress={() => setOnboardingMode('first-launch')}
+            />
+            <InlineButton
+              label="reference mode"
+              onPress={() => setOnboardingMode('reference')}
+            />
+          </View>
+          <Caption>
+            First-launch shows the live location states; reference hides location
+            and shows Done.
+          </Caption>
+        </Section>
       </View>
 
       <RelaySheet
@@ -113,6 +134,20 @@ export const DesignTestScreen: React.FC = () => {
           setRelayCount((n) => n + 1);
         }}
       />
+
+      <Modal
+        visible={onboardingMode !== null}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setOnboardingMode(null)}
+      >
+        {onboardingMode && (
+          <OnboardingScreen
+            mode={onboardingMode}
+            onContinue={() => setOnboardingMode(null)}
+          />
+        )}
+      </Modal>
     </ScrollView>
   );
 };
