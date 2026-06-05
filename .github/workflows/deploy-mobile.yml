@@ -1,11 +1,15 @@
-# Builds apps/mobile on EAS Build and auto-submits to TestFlight on merge
-# to main.
+# Builds apps/mobile on EAS Build and auto-submits to TestFlight.
 #
-# Path filter: only fires when something in the mobile binary's dependency
-# graph changes (mobile source/config, shared workspace deps, or this
-# workflow itself). Server-only or devtools-only changes don't trigger.
+# Trigger: manual only (workflow_dispatch). Run it from the Actions tab,
+# selecting the `main` branch, to spend a build from the monthly Expo cap
+# on main's current commit. Pushes to main no longer trigger a build.
 #
-# Concurrency: at most one mobile build runs at a time; a second push
+# Ref guard: the build job runs only when the dispatched ref is main
+# (`if: github.ref == 'refs/heads/main'`). A dispatch from any other branch
+# is skipped, so the App Store Connect / Expo secrets only ever flow into a
+# build of reviewed main-branch code.
+#
+# Concurrency: at most one mobile build runs at a time; a second run
 # queues until the first finishes.
 #
 # Auth strategy: pure App Store Connect API key (not Apple ID + password).
@@ -24,17 +28,12 @@
 name: Deploy Mobile
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/mobile/**'
-      - 'packages/shared/**'
-      - 'packages/api/**'
-      - '.github/workflows/deploy-mobile.yml'
+  workflow_dispatch:
 
 jobs:
   build:
     name: Build and submit to TestFlight
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency: deploy-mobile
     steps:
