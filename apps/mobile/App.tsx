@@ -19,6 +19,8 @@ import Toast from 'react-native-toast-message';
 import { TabNavigator } from './src/navigation/TabNavigator';
 import { toastConfig } from './src/components/ToastConfig';
 import { Splash } from './src/components/Splash';
+import { OnboardingScreen } from './src/screens/OnboardingScreen';
+import { useHasOnboarded } from './src/hooks/useHasOnboarded';
 import './global.css';
 
 // Deep links route every recognized invite URL into the Crowds tab with the
@@ -55,12 +57,27 @@ export default function App() {
     Inter_500Medium,
     Inter_600SemiBold,
   });
+  const { hasOnboarded, markOnboarded } = useHasOnboarded();
   const { colorScheme } = useColorScheme();
 
-  if (!loaded) {
+  // Splash covers both the font load and the brief AsyncStorage read of the
+  // onboarding flag (hasOnboarded === null), so we never flash onboarding at an
+  // already-onboarded user before the flag resolves.
+  if (!loaded || hasOnboarded === null) {
     return (
       <View className={`flex-1 ${colorScheme === 'dark' ? 'dark' : ''}`}>
         <Splash />
+      </View>
+    );
+  }
+
+  if (!hasOnboarded) {
+    return (
+      <View className={`flex-1 ${colorScheme === 'dark' ? 'dark' : ''}`}>
+        <SafeAreaProvider>
+          <OnboardingScreen mode="first-launch" onContinue={markOnboarded} />
+          <StatusBar style="auto" />
+        </SafeAreaProvider>
       </View>
     );
   }

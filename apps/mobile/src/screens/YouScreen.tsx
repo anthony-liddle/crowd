@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, ScrollView, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
 import * as Application from 'expo-application';
@@ -17,6 +17,7 @@ import {
   getLocationPermissionStatus,
   LocationPermissionStatus,
 } from '@/hooks/useLocation';
+import { OnboardingScreen } from '@/screens/OnboardingScreen';
 
 type IdentityState =
   | { kind: 'none' }
@@ -71,6 +72,7 @@ export const YouScreen: React.FC = () => {
   const [identityState, setIdentityState] = useState<IdentityState | null>(null);
   const [permission, setPermission] = useState<LocationPermissionStatus | null>(null);
   const [wiping, setWiping] = useState(false);
+  const [aboutVisible, setAboutVisible] = useState(false);
 
   const refresh = useCallback(async () => {
     const clock = await getRotationClock();
@@ -185,6 +187,10 @@ export const YouScreen: React.FC = () => {
             label="Build"
             value={Application.nativeBuildVersion ?? '—'}
           />
+          <LinkRow
+            label="How Crowd works"
+            onPress={() => setAboutVisible(true)}
+          />
         </Section>
 
         <View className="px-screen-x" style={{ marginTop: 24 }}>
@@ -201,6 +207,18 @@ export const YouScreen: React.FC = () => {
           />
         </View>
       </ScrollView>
+
+      <Modal
+        visible={aboutVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setAboutVisible(false)}
+      >
+        <OnboardingScreen
+          mode="reference"
+          onContinue={() => setAboutVisible(false)}
+        />
+      </Modal>
     </View>
   );
 };
@@ -232,4 +250,23 @@ const Row: React.FC<{ label: string; value: string }> = ({ label, value }) => (
       {value}
     </Text>
   </View>
+);
+
+const LinkRow: React.FC<{ label: string; onPress: () => void }> = ({
+  label,
+  onPress,
+}) => (
+  <Pressable
+    onPress={onPress}
+    accessibilityRole="button"
+    className="flex-row justify-between items-center active:opacity-60"
+    style={{ paddingVertical: 8 }}
+  >
+    <Text className="font-sans text-body text-ink dark:text-ink-d">
+      {label}
+    </Text>
+    <Text className="font-sans text-body text-dust-2 dark:text-dust-2-d">
+      ›
+    </Text>
+  </Pressable>
 );
