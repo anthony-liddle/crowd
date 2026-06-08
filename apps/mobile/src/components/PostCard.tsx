@@ -14,12 +14,16 @@ interface PostCardProps {
   message: Message;
   now: number;
   onShowRelaySheet: (message: Message) => void;
+  // True while this post's relay mutation is in flight; dims and disables the
+  // chip. Owned by FeedScreen, which tracks pending relays per message id.
+  relayPending?: boolean;
 }
 
 export const PostCard: React.FC<PostCardProps> = ({
   message,
   now,
   onShowRelaySheet,
+  relayPending = false,
 }) => {
   const { fractionRemaining, minutesRemaining } = getRingState(message, now);
   const ringLabel = formatRingLabel(minutesRemaining);
@@ -62,6 +66,7 @@ export const PostCard: React.FC<PostCardProps> = ({
                 count={boostCount}
                 isBoosted={!!message.isBoosted}
                 isOwner={false}
+                loading={relayPending}
                 onPress={() => onShowRelaySheet(message)}
               />
             )}

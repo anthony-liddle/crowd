@@ -41,6 +41,12 @@ export const FeedScreen: React.FC = () => {
 
   const [sheetMessage, setSheetMessage] = useState<Message | null>(null);
 
+  // Message IDs with a relay mutation in flight. The RelaySheet closes the
+  // moment the user confirms (before performRelay runs), so a second relay can
+  // be started while the first is still landing — hence a Set keyed by id, not
+  // a single flag. Drives each chip's dimmed/disabled in-flight state.
+  const [relayPending, setRelayPending] = useState<Set<string>>(() => new Set());
+
   // Filter out posts that hit zero — server already excludes them on the next
   // refetch, but state lingers between fetches. Without this, a post sits at
   // "0s" until the next refresh.
@@ -129,28 +135,41 @@ export const FeedScreen: React.FC = () => {
   }, [loadMessages, loadCrowds]);
 
   const performRelay = useCallback(async (message: Message) => {
-    const result = await getFreshLocation();
-    if (!result.ok) {
-      Toast.show({
-        type: 'error',
-        text1: "Couldn't get your location",
-        text2: 'Make sure GPS is on, then try again.',
-      });
-      return;
-    }
+    // Mark in-flight up front so the chip dims through the whole action —
+    // location fetch included, not just the network boost.
+    setRelayPending((prev) => new Set(prev).add(message.id));
     try {
-      await boostMessage(message.id, message.expiresAt, {
-        latitude: result.location.latitude,
-        longitude: result.location.longitude,
-        crowdId: selectedFeed.id || undefined,
+      const result = await getFreshLocation();
+      if (!result.ok) {
+        Toast.show({
+          type: 'error',
+          text1: "Couldn't get your location",
+          text2: 'Make sure GPS is on, then try again.',
+        });
+        return;
+      }
+      try {
+        await boostMessage(message.id, message.expiresAt, {
+          latitude: result.location.latitude,
+          longitude: result.location.longitude,
+          crowdId: selectedFeed.id || undefined,
+        });
+        // Confirm the deliberate, one-way action with a single medium impact —
+        // fired only once the boost has actually landed on the server.
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        Toast.show({ type: 'success', text1: 'Relayed', text2: 'Now visible to people near you.' });
+        loadMessages();
+      } catch (error) {
+        Toast.show({ type: 'error', text1: 'Relay failed', text2: 'Could not relay this post.' });
+      }
+    } finally {
+      // Clear on every exit — success, boost error, or the location-failure
+      // early return — so a chip never stays dim forever.
+      setRelayPending((prev) => {
+        const next = new Set(prev);
+        next.delete(message.id);
+        return next;
       });
-      // Confirm the deliberate, one-way action with a single medium impact —
-      // fired only once the boost has actually landed on the server.
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-      Toast.show({ type: 'success', text1: 'Relayed', text2: 'Now visible to people near you.' });
-      loadMessages();
-    } catch (error) {
-      Toast.show({ type: 'error', text1: 'Relay failed', text2: 'Could not relay this post.' });
     }
   }, [getFreshLocation, selectedFeed, loadMessages]);
 
@@ -248,6 +267,7 @@ export const FeedScreen: React.FC = () => {
             message={item}
             now={now}
             onShowRelaySheet={handleShowRelaySheet}
+            relayPending={relayPending.has(item.id)}
           />
         )}
         keyExtractor={(item) => item.id}
