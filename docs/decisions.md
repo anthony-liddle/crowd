@@ -6,7 +6,7 @@ This document is the historical companion to `docs/followups.md`. The followups 
 
 When something ships and the doing-it is no longer the work, the record of it moves here. The working backlog stays lean.
 
-Last entry added: late-May 2026 (accuracy-threshold defense on POST /messages: investigated, not shipping)
+Last entry added: early-June 2026 (TypeScript majors ride with the Expo SDK; relay affordance redesign arc)
 
 ---
 
@@ -297,6 +297,8 @@ One consumer wired up: `CreateMessageScreen` catches `ValidationError`, routes t
 
 **Honest limitation worth knowing:** the most realistic trigger for the new inline path is gated out today. The `CreateMessageScreen.onSubmit` handler has an existing empty-text check that returns early with a toast before the pre-parse runs. So the empty-message case — the one path that would naturally exercise the new inline rendering — never reaches the new code. The field-level path is correctly wired, will fire if the empty-text guard is relaxed (a small UX decision filed separately), and will fire for any future input that bypasses the existing client-side guards. Until then it's mostly defensive plumbing that's correct to have in place.
 
+**Follow-up resolved (investigated, no change made, June 2026):** the empty-text guard was later examined as a candidate removal to exercise the inline path. Conclusion: leave it. The `onSubmit` guard (`CreateMessageScreen.tsx:140-144`) is unreachable dead code, not a live gate — `submitDisabled = isBusy || isEmpty` (line 206) already disables the Post button while the field is empty, so `onSubmit` never runs in that state. The disabled-button affordance is the operative mechanism and the right UX (the user can see the field is empty; an error saying so would be redundant). The original followup misread which mechanism was load-bearing.
+
 **Lessons worth carrying forward:**
 
 - **Discovery's job is sometimes to reframe the work.** The followups entry's premise was based on an architectural assumption that didn't hold once examined. Discovery surfaced the mismatch; the reframed version delivers real value but adjacent to what was originally filed. The alternative — implementing the original premise — would have produced plumbing that fires for no realistic case. Trusting discovery's finding mattered more than honoring the original framing.
@@ -372,7 +374,7 @@ Plus the pre-build line in the Dockerfile's dev target. The build and prod stage
 
 - **Source-direct exposes latent code that compiled output hides.** The `process.env` reference in `packages/api/src/client.ts` worked in every current consumer because each had ambient `process` in some form (Node has it, Vite substitutes it, Metro's babel handles it). It's not strictly isomorphic — filed as a small followup. Worth knowing: switching from compiled to source consumption tends to surface this kind of environment dependency.
 
-- **Composite project references are coupled to dist-based consumption.** Removing one without the other produces "stale tsbuildinfo" workarounds. The `packages/shared/tsconfig.json` still has `composite: true` but nothing orchestrates it anymore; filed as a small followup to drop. Not urgent, but a real piece of orphaned config.
+- **Composite project references are coupled to dist-based consumption.** Removing one without the other produces "stale tsbuildinfo" workarounds. The `packages/shared/tsconfig.json` still had `composite: true` after the references were removed, but nothing orchestrated it anymore — practical effect was a `tsbuildinfo` that could go stale, requiring `rm -f packages/{shared,api}/tsconfig.tsbuildinfo` if a `tsc` run appeared to do nothing. *(Resolved in #115: `composite: true` dropped from `packages/shared/tsconfig.json` and the stale `tsconfig.tsbuildinfo` removed; declaration emit verified intact via `pnpm -r build`.)*
 
 ---
 
@@ -440,3 +442,38 @@ Ground-truth notes from discovery worth recording. Accuracy is not currently plu
 Not building it as a security feature. If location-accuracy is ever revisited, the honest shapes are (a) a client-side soft warning when the fix looks poor relative to the chosen radius — explicitly a user-help nudge, not a defense — or (b) plumb accuracy through and persist it without acting on it, then pick any threshold from real-world data rather than a heuristic. Both deferred; neither needed now.
 
 - **Reversals are part of the design conversation, not a failure of it.** The owned-crowd handling went from "delete private crowds" to "orphan everything" mid-arc, based on whose harm was being optimized for. Recording both the original instinct and the reversal preserves the reasoning for whoever revisits this later.
+
+---
+
+## TypeScript majors ride with the Expo SDK (June 2026)
+
+Status: settled as a working rule. Dependabot's TS 6 bump (#65) passed typecheck and tests once the config was migrated, but Expo's `expo install --check` gate (the mobile CI gate) correctly rejected `typescript@6.x` as out-of-SDK range — TypeScript is an SDK-managed dependency, the same bucket as the SDK-governed natives. So a TS major isn't independent: it rides with the SDK upgrade, resolved via `expo install --fix` when the SDK moves.
+
+The *forward-compatible* half — the tsconfig migrations TS 6 needs (drop deprecated `baseUrl`, shared `moduleResolution` → `Node16`, explicit `types` fields for api/mobile, `declare module "*.css"` for the NativeWind side-effect import) — was split out to PR #101, which carried no version bump, passed the Expo gate, and was green on TS 5.9.x.
+
+**Outcome:** SDK 54 → 55 landed (#112) and TypeScript *stayed* at 5.9.3 — SDK 55 does not require TS 6 either. The original "deferred to SDK 55" prediction expired without the bump landing; it now rides forward again to whichever SDK first pins TS 6.
+
+**The structural fix:** #117 narrowed Dependabot to exclude SDK-managed RN/Expo packages, so it no longer proposes bumps like the TS 6 one that the Expo gate will always reject. That removes the recurring rebase churn and the class of confusion where a green-on-typecheck PR can't actually merge.
+
+**Lesson worth carrying forward:** don't try to land a TS major (or any SDK-managed dependency) on its own; check the Expo gate first, and expect it to defer to the SDK. The forward-compatible config work can and should be split out and landed independently.
+
+---
+
+## Relay affordance redesign (June 2026, #108 → #114 → #116)
+
+Status: shipped. The boost/relay affordance went through a three-PR arc to reach its current form: a labeled chip in the PostCard metadata row, with an in-flight loading state, every relay routed through a confirmation modal.
+
+The arc:
+
+- **#108 (initial redesign):** first attempt at redesigning the boost/relay affordance on PostCard. Failed on device — the visual treatment didn't read as intended once rendered on a real screen, in a way the static design review couldn't predict.
+- **#114 (chip-in-metadata-row):** moved the relay control into the metadata row as a labeled chip. This worked. `RelayButton` gained an optional `loading` prop in this PR, but nothing passed it a real value yet.
+- **#116 (loading wired up):** activated the `loading` prop. `FeedScreen` now tracks in-flight relays in a `Set<string>` of message IDs — `performRelay` adds the id on entry and clears it in a `finally`, so the chip dims through the whole action (location fetch included) and never stays stuck dim on the success, boost-error, or location-failure paths. A Set rather than a single flag because the RelaySheet closes on confirm before `performRelay` runs, so a second relay can start while the first is still landing. As a side benefit, `disabled={loading}` also blocks re-tapping an in-flight chip.
+
+The old `useRelaySettings` hook (a `useSyncExternalStore` singleton backing the previous relay model) was removed as part of this arc; the only trace left is a comment in `useHasOnboarded.ts` referencing its shape.
+
+**Lessons worth carrying forward:**
+
+- **Discoverability failures can be about styling, not placement.** The #108 → #114 progression wasn't about moving the control somewhere more findable; the placement was workable. What changed was the visual treatment (the labeled chip) that made it read as an actionable affordance. When a control isn't getting noticed, the fix isn't always "move it" — it can be "make it look like the thing it is."
+- **First attempts at visual redesigns can fail on device in ways discovery can't predict.** #108's treatment looked right in review and wrong on a real screen. Static design review and on-device rendering are different verification surfaces; budget for an iteration that only surfaces once it's running on hardware.
+- **"Ship the prop, then wire it up" is clean when the activation follows.** #114 added the `loading` prop with no caller; #116 supplied the real value. The split is honest as long as the activation actually lands — an inert prop that never gets wired is just dead surface area. Here the follow-through closed it.
+- **Collapsing the gesture model is a deliberate UX choice worth preserving.** Every relay now routes through the confirmation modal — no more long-press shortcut. Funneling all relays through one confirm path is what makes the in-flight tracking tractable (one entry point to instrument) and removes a hidden gesture users had to discover. The simpler single-path model is the intended end state, not a temporary limitation.
