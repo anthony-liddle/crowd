@@ -14,7 +14,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Controller, useForm } from 'react-hook-form';
 import Toast from 'react-native-toast-message';
 import { useColorScheme } from 'nativewind';
-import { ValidationError } from '@repo/api';
+import { ValidationError, RateLimitError } from '@repo/api';
 import { createMessage, getMyCrowds } from '@/services/api';
 import { CreateMessagePayload, Crowd, FeedSource, TabNavigationProp } from '@/types';
 import { useLocation, LocationFetchError } from '@/hooks/useLocation';
@@ -105,6 +105,10 @@ export const CreateMessageScreen: React.FC = () => {
   const lifespanMin = watch('lifespanMin');
   const charCount = text?.length ?? 0;
   const isEmpty = (text ?? '').trim().length === 0;
+  // Reach only gates visibility on the Everyone feed. When a crowd is the
+  // target, the reach controls and preview are hidden and the radius is sent
+  // at max (the server ignores it for crowd posts — see GET /messages/feed).
+  const isCrowdTarget = selectedTarget.id !== null;
 
   const showLocationError = useCallback(async (error: LocationFetchError) => {
     if (error === 'permission_denied') {
@@ -166,7 +170,11 @@ export const CreateMessageScreen: React.FC = () => {
       const payload: CreateMessagePayload = {
         text: data.text.trim(),
         duration: Math.round(data.lifespanMin),
-        distance: Math.round(data.reachKm * 1000),
+        // Crowd posts ignore reach server-side; send the max so the value is
+        // always API-valid even though the Reach slider is hidden for them.
+        distance: isCrowdTarget
+          ? REACH_MAX * 1000
+          : Math.round(data.reachKm * 1000),
       };
       await createMessage(payload, {
         latitude: result.location.latitude,
@@ -194,6 +202,12 @@ export const CreateMessageScreen: React.FC = () => {
         if (unmatched.length > 0) {
           Toast.show({ type: 'error', text1: 'Failed to post', text2: unmatched[0].message });
         }
+      } else if (error instanceof RateLimitError) {
+        Toast.show({
+          type: 'error',
+          text1: 'Posting too fast',
+          text2: 'Wait a moment before trying again.',
+        });
       } else {
         Toast.show({ type: 'error', text1: 'Failed to post', text2: 'Try again.' });
       }
@@ -272,54 +286,42 @@ export const CreateMessageScreen: React.FC = () => {
             ) : null}
           </View>
 
-          {/* Reach + lifespan preview */}
-          <View>
+          {/* Reach preview — Everyone only. Visualizes the reach radius, which
+              crowd posts don't use. The per-slider labels below carry the
+              numeric values, so the old duplicate summary row is gone. */}
+          {!isCrowdTarget && (
             <ReachPreview reachKm={reachKm} lifespanMin={lifespanMin} />
-            <View
-              className="flex-row justify-between"
-              style={{ marginTop: 8 }}
-            >
-              <Text className="font-sans text-meta text-dust dark:text-dust-d">
-                Reach{' '}
-                <Text className="font-sans-medium text-ink dark:text-ink-d">
+          )}
+
+          {/* Reach slider — hidden for crowd posts (reach doesn't gate
+              visibility inside a crowd). */}
+          {!isCrowdTarget && (
+            <View>
+              <View
+                className="flex-row justify-between"
+                style={{ marginBottom: 4 }}
+              >
+                <Text className="font-sans text-meta text-dust dark:text-dust-d">
+                  Reach
+                </Text>
+                <Text className="font-sans-medium text-meta text-ink dark:text-ink-d">
                   {formatReach(reachKm)}
                 </Text>
-              </Text>
-              <Text className="font-sans text-meta text-dust dark:text-dust-d">
-                Lifespan{' '}
-                <Text className="font-sans-medium text-ink dark:text-ink-d">
-                  {formatLifespan(lifespanMin)}
-                </Text>
-              </Text>
+              </View>
+              <Controller
+                control={control}
+                name="reachKm"
+                render={({ field: { onChange, value } }) => (
+                  <ThemedSlider
+                    minimumValue={0}
+                    maximumValue={1}
+                    value={reachToSlider(value)}
+                    onValueChange={(s) => onChange(sliderToReach(s))}
+                  />
+                )}
+              />
             </View>
-          </View>
-
-          {/* Reach slider */}
-          <View>
-            <View
-              className="flex-row justify-between"
-              style={{ marginBottom: 4 }}
-            >
-              <Text className="font-sans text-meta text-dust dark:text-dust-d">
-                Reach
-              </Text>
-              <Text className="font-sans-medium text-meta text-ink dark:text-ink-d">
-                {formatReach(reachKm)}
-              </Text>
-            </View>
-            <Controller
-              control={control}
-              name="reachKm"
-              render={({ field: { onChange, value } }) => (
-                <ThemedSlider
-                  minimumValue={0}
-                  maximumValue={1}
-                  value={reachToSlider(value)}
-                  onValueChange={(s) => onChange(sliderToReach(s))}
-                />
-              )}
-            />
-          </View>
+          )}
 
           {/* Lifespan slider */}
           <View>

@@ -128,13 +128,16 @@ export const getRingState = (
  * we drop precision once a post has 1h+ left.
  *   <60s  → "Ns"
  *   1-59m → "Nm"
- *   1h+   → "Nh"  (floor, no minutes)
+ *   1h+   → "Nh"  (rounds up within 2 min of the next whole hour)
  */
 export const formatRingLabel = (minutesRemaining: number): string => {
   if (minutesRemaining <= 0) return '0s';
   if (minutesRemaining < 1) return `${Math.max(1, Math.round(minutesRemaining * 60))}s`;
   if (minutesRemaining < 60) return `${Math.round(minutesRemaining)}m`;
-  return `${Math.floor(minutesRemaining / 60)}h`;
+  // Round up when within 2 min of the next whole hour, so a fresh 10h post
+  // reads "10h" until ~2 min have actually elapsed instead of dropping to "9h"
+  // the instant flooring strips its partial hour.
+  return `${Math.floor((minutesRemaining + 2) / 60)}h`;
 };
 
 /**

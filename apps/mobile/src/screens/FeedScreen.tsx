@@ -27,7 +27,8 @@ export const FeedScreen: React.FC = () => {
     | { kind: 'locating' }
     | { kind: 'loading' }
     | { kind: 'ready' }
-    | { kind: 'error'; error: LocationFetchError };
+    | { kind: 'error'; error: LocationFetchError }
+    | { kind: 'load-error' };
   const [messages, setMessages] = useState<Message[]>([]);
   const [feedState, setFeedState] = useState<FeedState>({ kind: 'locating' });
   const [refreshing, setRefreshing] = useState(false);
@@ -37,7 +38,7 @@ export const FeedScreen: React.FC = () => {
   const { getFreshLocation } = useLocation();
 
   const [crowds, setCrowds] = useState<Crowd[]>([]);
-  const [selectedFeed, setSelectedFeed] = useState<FeedSource>({ id: null, name: 'Global' });
+  const [selectedFeed, setSelectedFeed] = useState<FeedSource>({ id: null, name: 'Everyone' });
 
   const [sheetMessage, setSheetMessage] = useState<Message | null>(null);
 
@@ -111,7 +112,9 @@ export const FeedScreen: React.FC = () => {
       setFeedState({ kind: 'ready' });
     } catch (error) {
       console.error('Error loading messages:', error);
-      setFeedState({ kind: 'ready' });
+      // Surface the failure instead of presenting it as an empty feed — a
+      // silent empty state reads as "the app is dead" to a new tester.
+      setFeedState({ kind: 'load-error' });
     } finally {
       setRefreshing(false);
     }
@@ -184,7 +187,7 @@ export const FeedScreen: React.FC = () => {
   }, [sheetMessage, performRelay]);
 
   const feedSources: FeedSource[] = [
-    { id: null, name: 'Global' },
+    { id: null, name: 'Everyone' },
     ...crowds.map(c => ({ id: c.id, name: c.name })),
   ];
 
@@ -196,7 +199,9 @@ export const FeedScreen: React.FC = () => {
     (feedState.kind === 'locating' || feedState.kind === 'loading') &&
     visibleMessages.length === 0 &&
     !refreshing;
-  const isInitialError = feedState.kind === 'error' && visibleMessages.length === 0;
+  const isInitialError =
+    (feedState.kind === 'error' || feedState.kind === 'load-error') &&
+    visibleMessages.length === 0;
 
   const renderEmpty = () => {
     if (isInitialLoading) {
@@ -215,11 +220,27 @@ export const FeedScreen: React.FC = () => {
         </View>
       );
     }
-    if (isInitialError && feedState.kind === 'error') {
-      const message =
-        feedState.error === 'permission_denied'
-          ? 'Crowd needs location access to show nearby posts.'
-          : "We couldn't get your location. Make sure GPS is on, then try again.";
+    if (
+      isInitialError &&
+      (feedState.kind === 'error' || feedState.kind === 'load-error')
+    ) {
+      // Feed-load failure and location failure share the same visual
+      // treatment so the two error paths feel coherent; only the copy differs.
+      const { headline, body } =
+        feedState.kind === 'load-error'
+          ? {
+              headline: 'Couldn’t load the feed',
+              body: 'Check your connection, then try again.',
+            }
+          : feedState.error === 'permission_denied'
+            ? {
+                headline: 'Can’t find you',
+                body: 'Crowd needs location access to show nearby posts.',
+              }
+            : {
+                headline: 'Can’t find you',
+                body: "We couldn't get your location. Make sure GPS is on, then try again.",
+              };
       return (
         <View
           className="flex-1 items-center justify-center px-screen-x"
@@ -230,13 +251,13 @@ export const FeedScreen: React.FC = () => {
             className="font-serif text-title text-ink dark:text-ink-d"
             style={{ marginTop: 24, textAlign: 'center' }}
           >
-            Can’t find you
+            {headline}
           </Text>
           <Text
             className="font-sans text-body text-dust dark:text-dust-d"
             style={{ marginTop: 8, textAlign: 'center', maxWidth: 260 }}
           >
-            {message}
+            {body}
           </Text>
           <View style={{ marginTop: 24, width: '100%', maxWidth: 240 }}>
             <PrimaryButton label="Try again" onPress={loadMessages} />

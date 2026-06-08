@@ -21,7 +21,7 @@ import type {
 } from '@repo/shared';
 import * as Shared from '@repo/shared';
 import { z, ZodError } from 'zod';
-import { ValidationError } from './errors';
+import { ValidationError, RateLimitError } from './errors';
 
 const BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080'; // Default for local dev
 
@@ -92,6 +92,9 @@ class ApiClient {
             // generic Error below still fires for non-JSON 400 bodies.
             if (parseErr instanceof ValidationError) throw parseErr;
           }
+        }
+        if (response.status === 429) {
+          throw new RateLimitError();
         }
         throw new Error(`API Error: ${response.status} - ${errorBody.slice(0, 200)}`);
       }

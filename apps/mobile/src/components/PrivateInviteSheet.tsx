@@ -96,7 +96,7 @@ export const PrivateInviteSheet: React.FC<PrivateInviteSheetProps> = ({
           <Text
             className="font-serif text-title text-ink dark:text-ink-d"
             style={{ marginBottom: 8 }}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             Invite to {crowdName}
           </Text>

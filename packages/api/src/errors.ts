@@ -27,3 +27,15 @@ export class ValidationError extends Error {
     return this.issues.map((issue) => issue.message);
   }
 }
+
+// Thrown by the API client on a 429 Too Many Requests response (the per-user
+// rate limit on POST /messages). Distinct from a generic network/server Error
+// so callers can show "slow down" copy instead of a misdirecting "try again".
+export class RateLimitError extends Error {
+  readonly statusCode = 429 as const;
+
+  constructor(message = 'Rate limit exceeded') {
+    super(message);
+    this.name = 'RateLimitError';
+  }
+}

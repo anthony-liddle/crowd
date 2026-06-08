@@ -1,2 +1,2 @@
 export { api } from './client';
-export { ValidationError } from './errors';
+export { ValidationError, RateLimitError } from './errors';
