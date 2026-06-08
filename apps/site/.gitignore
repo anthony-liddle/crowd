@@ -1,0 +1,12 @@
+# build output
+dist/
+
+# generated Astro types
+.astro/
+
+# dependencies (also covered by the repo-root .gitignore)
+node_modules/
+
+# environment
+.env
+.env.production

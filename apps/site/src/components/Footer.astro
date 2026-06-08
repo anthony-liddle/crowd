@@ -1,0 +1,56 @@
+---
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <p class="footer-line">
+      Bug reports and feature requests on
+      <a href="https://github.com/anthony-liddle/crowd/issues">GitHub</a>.
+    </p>
+    <p class="footer-line">
+      Other questions:
+      <a href="mailto:hello@joincrowd.app">hello@joincrowd.app</a>.
+    </p>
+    <nav class="footer-meta">
+      <a href="/">Home</a>
+      <span aria-hidden="true">·</span>
+      <a href="/privacy">Privacy</a>
+    </nav>
+    <p class="footer-copy">&copy; {year} Crowd</p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--rule);
+    padding-block: 2rem 3rem;
+  }
+
+  .footer-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .footer-line {
+    margin: 0;
+    color: var(--dust);
+    font-size: 0.9375rem;
+  }
+
+  .footer-meta {
+    margin-top: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    color: var(--dust);
+    font-size: 0.9375rem;
+  }
+
+  .footer-copy {
+    margin: 0.75rem 0 0;
+    color: var(--dust);
+    font-size: 0.8125rem;
+  }
+</style>

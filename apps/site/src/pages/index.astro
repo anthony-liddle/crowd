@@ -1,0 +1,130 @@
+---
+import Base from '../layouts/Base.astro';
+
+const title = 'Crowd — built to forget';
+const description =
+  'Crowd is anonymous, ephemeral, location-bounded messaging. Posts reach the people near you, last only as long as you choose, and then they are gone.';
+---
+
+<Base title={title} description={description}>
+  <section class="hero">
+    <h1>Built to forget.</h1>
+    <p class="tagline">A place to organize, where nothing lingers.</p>
+    <p class="lede">
+      Crowd is anonymous, ephemeral, location-bounded messaging. Posts reach the
+      people near you, last only as long as you choose, and then they are gone —
+      no feed history, no profiles, no permanent record.
+    </p>
+  </section>
+
+  <section class="block">
+    <h2>How posts work</h2>
+    <p>
+      Every post has a place and a clock. You set how far it reaches and how long
+      it lives — from a few minutes to several hours. When the time runs out, the
+      post disappears for everyone. People nearby can <strong>relay</strong> a
+      post to carry it a little further than its origin.
+    </p>
+  </section>
+
+  <section class="block">
+    <h2>How crowds work</h2>
+    <p>
+      A <strong>crowd</strong> is a trusted, invite-only group. Share a code in
+      person or send a link to bring someone in. A crowd — and everything posted
+      inside it — lasts up to 24 hours, then disappears completely.
+    </p>
+  </section>
+
+  <section class="block">
+    <h2>How identity works</h2>
+    <p>
+      There are no accounts. Your identity is generated on your device and
+      rotates as your posts expire, so nothing you do is tied to a lasting
+      profile. Nothing to sign up for, nothing to log in to.
+    </p>
+  </section>
+
+  <section class="block values">
+    <h2>What we don't do</h2>
+    <p>
+      Privacy by design. No engagement metrics, no algorithm deciding what you
+      see, no surveillance. Crowd doesn't measure you, and it isn't built to keep
+      you scrolling.
+    </p>
+  </section>
+
+  <section class="cta">
+    <p class="cta-note">TestFlight beta coming soon.</p>
+    <p class="cta-sub">
+      Questions in the meantime? Email
+      <a href="mailto:hello@joincrowd.app">hello@joincrowd.app</a>.
+    </p>
+  </section>
+</Base>
+
+<style>
+  .hero {
+    margin-bottom: 3.5rem;
+  }
+
+  .hero h1 {
+    margin: 0 0 0.5rem;
+    font-size: clamp(2.25rem, 6vw, 3rem);
+  }
+
+  .tagline {
+    margin: 0 0 2rem;
+    font-family: 'Libre Baskerville', Georgia, serif;
+    font-size: 1.1875rem;
+    color: var(--ember);
+  }
+
+  .lede {
+    margin: 0;
+    font-size: 1.125rem;
+    color: var(--ink-2);
+    max-width: 34rem;
+  }
+
+  .block {
+    padding-block: 1.75rem;
+    border-top: 1px solid var(--rule);
+  }
+
+  .block h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.25rem;
+  }
+
+  .block p {
+    margin: 0;
+    color: var(--ink-2);
+    max-width: 34rem;
+  }
+
+  strong {
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .cta {
+    margin-top: 2.75rem;
+    padding: 1.5rem;
+    border: 1px solid var(--rule);
+    border-radius: 0.625rem;
+  }
+
+  .cta-note {
+    margin: 0 0 0.375rem;
+    font-family: 'Libre Baskerville', Georgia, serif;
+    font-size: 1.0625rem;
+    color: var(--ink);
+  }
+
+  .cta-sub {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--dust);
+  }
+</style>
