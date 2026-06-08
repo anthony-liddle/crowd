@@ -18,8 +18,26 @@ import { ReachPreview } from '@/components/ReachPreview';
 import { PrimaryButton, QuietButton, InlineButton } from '@/components/Buttons';
 import { RelayButton } from '@/components/RelayButton';
 import { RelaySheet } from '@/components/RelaySheet';
+import { PostCard } from '@/components/PostCard';
 import { ThemedSlider } from '@/components/ThemedSlider';
 import { OnboardingScreen } from '@/screens/OnboardingScreen';
+import { Message } from '@/types';
+
+// Representative card for the PostCard gallery. Each case overrides only the
+// relay-relevant fields; the rest is shared boilerplate.
+const mockMessage = (over: Partial<Message>): Message => ({
+  id: Math.random().toString(36).slice(2),
+  text: 'Free chair on the corner of 5th and Main — grab it before the rain.',
+  timestamp: new Date(Date.now() - 12 * 60 * 1000),
+  activeDistance: 800,
+  timeLeft: 180,
+  duration: 360,
+  expiresAt: new Date(Date.now() + 180 * 60 * 1000).toISOString(),
+  boostCount: 0,
+  isOwner: false,
+  isBoosted: false,
+  ...over,
+});
 
 export const DesignTestScreen: React.FC = () => {
   const [reachKm, setReachKm] = useState(2.5);
@@ -86,8 +104,8 @@ export const DesignTestScreen: React.FC = () => {
           </View>
         </Section>
 
-        <Section label="Relay button">
-          <View className="flex-row items-start" style={{ gap: 32 }}>
+        <Section label="Relay chip">
+          <View className="flex-row items-start" style={{ gap: 24 }}>
             <View style={{ alignItems: 'center', gap: 6 }}>
               <RelayButton
                 count={relayCount}
@@ -95,20 +113,68 @@ export const DesignTestScreen: React.FC = () => {
                 isOwner={false}
                 onPress={() => setSheetVisible(true)}
               />
-              <Caption>boostable</Caption>
+              <Caption>relay</Caption>
             </View>
             <View style={{ alignItems: 'center', gap: 6 }}>
               <RelayButton count={4} isBoosted isOwner={false} onPress={() => {}} />
-              <Caption>boosted by me</Caption>
+              <Caption>relayed by me</Caption>
             </View>
             <View style={{ alignItems: 'center', gap: 6 }}>
-              <RelayButton count={2} isBoosted={false} isOwner onPress={() => {}} />
-              <Caption>own post (count only)</Caption>
+              <RelayButton
+                count={3}
+                isBoosted={false}
+                isOwner={false}
+                loading
+                onPress={() => {}}
+              />
+              <Caption>in-flight (dimmed)</Caption>
             </View>
           </View>
           <Caption>
-            Tap the boostable tile to open the confirm sheet; confirming bumps the
+            Tap the relay chip to open the confirm sheet; confirming bumps the
             count.
+          </Caption>
+        </Section>
+
+        <Section label="PostCard — relay states">
+          <View
+            className="border border-rule dark:border-rule-d rounded-md"
+            style={{ overflow: 'hidden' }}
+          >
+            {/* Unboosted, no relays yet → chip reads "Relay". */}
+            <PostCard
+              message={mockMessage({ boostCount: 0 })}
+              now={Date.now()}
+              onShowRelaySheet={() => setSheetVisible(true)}
+            />
+            {/* Unboosted, relayed by others → "Relay · 3". */}
+            <PostCard
+              message={mockMessage({ boostCount: 3 })}
+              now={Date.now()}
+              onShowRelaySheet={() => setSheetVisible(true)}
+            />
+            {/* Boosted by me → ember "Relayed · 4", display-only. */}
+            <PostCard
+              message={mockMessage({ boostCount: 4, isBoosted: true })}
+              now={Date.now()}
+              onShowRelaySheet={() => setSheetVisible(true)}
+            />
+            {/* Own post, no relays → no relay element at all. */}
+            <PostCard
+              message={mockMessage({ isOwner: true, boostCount: 0 })}
+              now={Date.now()}
+              onShowRelaySheet={() => setSheetVisible(true)}
+            />
+            {/* Own post, relayed → plain "2 relays" metadata, no chip. */}
+            <PostCard
+              message={mockMessage({ isOwner: true, boostCount: 2 })}
+              now={Date.now()}
+              onShowRelaySheet={() => setSheetVisible(true)}
+            />
+          </View>
+          <Caption>
+            Right column is the Ring alone; the relay control lives in the bottom
+            metadata row. Own posts show a plain relay count, not a chip.
           </Caption>
         </Section>
 
