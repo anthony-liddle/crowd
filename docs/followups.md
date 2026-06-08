@@ -4,7 +4,7 @@ The working backlog of what's pending. Lean by design — when items ship, they 
 
 For working principles, historical decisions, and lessons from completed work, see `docs/decisions.md`.
 
-Last updated: early-June 2026 (You tab and Clear my data shipped; accuracy-threshold defense investigated and set aside; TS 6 bump deferred to SDK 55, forward-compatible tsconfig migrations split out to PR #101).
+Last updated: early-June 2026 (Expo SDK 54 → 55 shipped without requiring TS 6; relay affordance redesign and loading-state wire-up shipped; orphaned `composite` flag dropped; the TS-6/SDK-coupling lesson and the relay-redesign arc moved to `docs/decisions.md`).
 
 ---
 
@@ -16,15 +16,11 @@ Last updated: early-June 2026 (You tab and Clear my data shipped; accuracy-thres
 
 ## Wider TestFlight readiness
 
-Internal TestFlight has been painful for adding testers. Moving to external testing (up to 10,000 users) requires Apple's Beta App Review on the operational side, plus a small set of followups items that meaningfully affect first-impression quality. Listed here as a filtered view of the items below.
+Internal TestFlight has been painful for adding testers. Moving to external testing (up to 10,000 users) requires Apple's Beta App Review on the operational side. The code-side first-impression blockers have shipped; what remains is the operational review plus the not-on-this-track notes below.
 
 **Genuine blockers:** both shipped.
 - Cleanup script for production — shipped, see `docs/decisions.md`.
 - Server validation of post coordinates — shipped (rate-limit version), see `docs/decisions.md`.
-
-**Strong-soft blockers (would meaningfully reduce first-impression quality):**
-
-- Onboarding / first-launch identity rotation UX — see Deferred design surfaces. Internal testers can have the privacy model explained; wider testers can't.
 
 **Not actually on this track (despite previous framing):**
 
@@ -34,7 +30,7 @@ Internal TestFlight has been painful for adding testers. Moving to external test
 
 - Apple Beta App Review for TestFlight external testing. Operational work (app metadata, screenshots, beta description, content warnings, export compliance). Can run in parallel with the code items above; typically a few days to a week of Apple review time after submission.
 
-When the strong-soft blockers are addressed (or you decide they don't apply), the path to wider TestFlight is open. Everything else in this doc is either polish, longer-horizon work, or pending tester feedback.
+With the blockers shipped, the path to wider TestFlight is open — the remaining gate is operational (Apple Beta App Review). Everything else in this doc is either polish, longer-horizon work, or pending tester feedback.
 
 ## Deferred design surfaces (from the Ember migration)
 
@@ -43,16 +39,9 @@ These were intentionally out of scope for the design migration but will need att
 - **Post-detail screen.** When a user taps a post, what do they see? Privacy-aware design: should show context without revealing exact origin coordinates. A relative-distance diagram, not a map pin.
 - **Error/loading states beyond toast.** Today: toasts for everything. Better: empty states for failure modes, inline retry affordances, contextual error messages. (Partially addressed in stale-location fix: FeedScreen now has a "Can't find you" retry block; CreateMessageScreen has the locating state machine.)
 - **NFC tap flow.** Currently a "coming soon" modal with honest copy. Adding `react-native-nfc-manager` requires switching to a dev client (which the project effectively now uses for local builds, so the dev-client switch is no longer the blocker it was) and adding iOS NFC entitlements. When implemented, fold into the unified `JoinCrowdModal` state machine alongside the QR flow rather than as a sibling Modal.
-- **Onboarding / first-launch identity rotation UX.** Currently identity is generated silently on first launch. Worth a real "this is what anonymous means here" first-launch screen, especially given the now-coherent two-tier identity model (globalUserId + crowd-specific IDs). The user should understand what each is for.
+- **Identity-model education.** First-launch onboarding shipped (#109) with the privacy framing ("Built to forget"; "No accounts. No logins. No trace."; "your identity rotates with them") and the location ask, re-accessible after first launch via "How Crowd works" on the You tab. What's still deferred: deeper identity-model education explaining the two-tier system (globalUserId rotating with content; crowd-specific IDs persisting per crowd). Today the user understands ephemerality at a high level, but the mechanics of which identity rotates when are not surfaced.
 - **Accessibility audit.** VoiceOver labels on every interactive element, Dynamic Type support beyond `allowFontScaling=false` on the Ring, color-contrast verification, focus order through screens.
-
----
-
-## Identity model — open items
-
-Background: `docs/decisions.md` → Identity model rearchitecture.
-
-- **Eight orphaned crowds in the production dev DB from Round 2 testing.** Memberships keyed by mainUserId from before Round 4. Will self-clean within 24h via expiration; no action needed.
+- **Background location refresh.** Should the app ever refresh location in the background, or on app-resume via `AppState` listeners? The on-demand fresh fetch at action time (from the stale-location fix) covers the immediate need; background tracking is a future optimization with real costs — battery, permissions, iOS background modes — and deserves its own design conversation if pursued.
 
 ---
 
@@ -68,15 +57,13 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 
 ### Testing infrastructure
 
-- **React Native component testing setup.** Mobile's Jest is `testEnvironment: 'node'` and has never been wired for RN component rendering. Decision needed: jest-expo + @testing-library/react-native, vs. Maestro for flows, vs. Detox for E2E. The work isn't just preset config; also writing native-module mocks (Appearance, expo-location) and tuning `transformIgnorePatterns`. Single deliberate piece of work, not folded into another phase. Especially relevant after PR #70: the unified Modal state machine has internal states that would benefit from component-level tests rather than integration tests.
+- **React Native component testing setup.** **Deferred by policy** — standing up new test infrastructure is its own piece of work and is deliberately not folded into any cleanup phase (see the "don't expand the testing surface inside cleanup phases" principle in `docs/decisions.md`). Mobile's Jest is `testEnvironment: 'node'` and has never been wired for RN component rendering. Decision needed when picked up: jest-expo + @testing-library/react-native, vs. Maestro for flows, vs. Detox for E2E. The work isn't just preset config; also writing native-module mocks (Appearance, expo-location) and tuning `transformIgnorePatterns`. Pick up as dedicated work when component-level coverage of the unified Modal state machine (PR #70 — internal states that would benefit from component-level rather than integration tests) becomes worth the preset/mock setup cost.
 
 ### Build and dependency hygiene
 
-- **Phantom-dependency audit.** The Zod 3-vs-4 split in Phase A was an unused dep affecting hoisting. Suspect more exist. Run `depcheck` or `knip` across the monorepo. Standalone follow-up, not gated to any phase.
-- **TypeScript is an Expo-SDK-managed dependency — TS major bumps are coupled to SDK upgrades.** Expo SDK 54 pins TypeScript to `~5.9.2`, so `expo install --check` (the mobile CI gate) will block any TS version outside that range. Dependabot's TS 6 bump (#65) passes typecheck and tests once the config is migrated, but the Expo gate correctly rejects `typescript@6.0.3` as out-of-SDK-54-range — same bucket as the SDK-governed natives in #92. So TS major bumps are not independent: they ride with the SDK upgrade, resolved via `expo install --fix` when the SDK moves. The TS 6 bump is therefore deferred to the SDK-55 upgrade; #65 stays open and Dependabot keeps rebasing it. The *forward-compatible* half — the tsconfig migrations TS 6 needs (drop deprecated `baseUrl`, shared `moduleResolution` → `Node16`, explicit `types` fields for api/mobile, `declare module "*.css"` for the NativeWind side-effect import) — was split out to PR #101, which carries no version bump, passes the Expo gate, and is green on the current TS 5.9.x. Lesson for future-me: don't try to land a TS major on its own; check the Expo gate first, and expect it to defer to the SDK.
+- **Phantom-dependency audit.** **Deferred until a hoisting/build oddity motivates it.** The Zod 3-vs-4 split in Phase A was an unused dep affecting hoisting. Suspect more exist. When something surfaces, run `depcheck` or `knip` across the monorepo. Standalone follow-up, not gated to any phase.
 - **`packages/api` CJS-only emit.** Works but is the older module format. ESM migration of the workspace would simplify Rollup's job in devtools and eliminate the `commonjsOptions` config entirely. Cross-cutting (server consumes shared directly), so this is a real piece of work.
 - **`process.env` reference in `packages/api/src/client.ts`.** Source-direct workspace exports surfaced a latent environment dependency that compiled output was hiding. The current code works in every consumer (Vite substitutes `process.env`, Node has it natively, Metro's babel handles it via the env preset), but it's not strictly isomorphic — the package presents as portable code while quietly requiring an ambient `process` object. Probably worth replacing with an explicit config-passed-in pattern when next touched. Not blocking; the code works today.
-- **`composite: true` in `packages/shared/tsconfig.json` is orphaned.** Removed during source-direct migration: `packages/api/tsconfig.json`'s `references: [{ path: "../shared" }]` was forcing TypeScript to look for emitted `.d.ts` files, defeating source-direct. The reference is gone, but `composite: true` in the shared package itself remains and nothing now orchestrates it. Practical effect: `tsbuildinfo` can go stale, requiring `rm -f packages/{shared,api}/tsconfig.tsbuildinfo` if a `tsc` run appears to do nothing. Resolved: `composite: true` dropped and the stale `tsconfig.tsbuildinfo` removed in the chore/small-followups branch; declaration emit verified intact via `pnpm -r build`.
 
 ### Server-side defense in depth
 
@@ -92,23 +79,12 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 ### Mobile-specific
 
 - **Slider thumb fidelity.** The Ember design called for paper background + 2px ember border on slider thumbs. `@react-native-community/slider` doesn't support custom thumb components. Switching to `@miblanchard/react-native-slider` (which does) or building a slider from scratch with `react-native-gesture-handler` + `react-native-reanimated` are the two paths.
-- **`useRelaySettings` singleton under Suspense.** Today it's a singleton via `useSyncExternalStore`. If it ever needs to render in Suspense / Concurrent contexts, the in-memory state could drift from AsyncStorage. Wrap in a Provider if scaling.
-- **Pre-existing TS errors in `apps/mobile/tests/`.** Resolved by deletion in Phase A. Listed here only because the historical reports reference it.
-- **`refreshLocation` cleanup for consistency.** The existing `refreshLocation` on `useLocation` still calls `requestForegroundPermissionsAsync` on every invocation (re-prompts every time). It's no longer on the hot path (replaced by `getFreshLocation` for action-time use), but worth collapsing to use the same `getFreshLocation` semantics (read permission first, request only when missing) for consistency. Small future cleanup.
-- **Empty-text guard in CreateMessageScreen.** Investigated; no change needed. The `onSubmit` guard at lines 141-144 is dead code: `submitDisabled = isBusy || isEmpty` already disables the Post button while the field is empty, so `onSubmit` never runs in that state. The disabled-button affordance is the operative mechanism and the right UX (the user can see the field is empty; an error saying so would be redundant). The dead guard is harmless defensive code. The original entry misread which mechanism was operative.
-- **Background location strategy.** Independent of the stale-location fix: do we ever want the app to refresh location in the background, or on app-resume via `AppState` listeners? If yes, separate design conversation about battery, permissions, iOS background modes. The on-demand fresh fetch at action time covers the immediate need; background tracking is a future optimization with real costs.
-- **RelayButton `loading` prop is inert.** `FeedScreen.performRelay` does not pass per-message pending state to the chip, so the in-flight dim never fires in production. To activate, thread the boost mutation's pending state from FeedScreen down to the corresponding RelayButton via the new optional `loading` prop. Small change, no design work needed.
 - **RelayButton chip border is 0.5px.** May render too faintly on some lower-density Android screens. When Android scope opens, verify the chip is visible at native density; if not, switch to `StyleSheet.hairlineWidth` or 1px. One of several Android-readiness checks for the chip surface.
 
 ### Repo hygiene observations
 
 - **`pnpm.packageExtensions` and `.npmrc public-hoist-pattern[]=*@babel/*`.** Load-bearing for the React Native build. Documented in CONTRIBUTING.md as "don't delete these without reading this." If a new contributor strips them, Metro breaks.
 - **`vite.config.ts process.env shim`.** `define: { 'process.env': {} }` is load-bearing for some dependency that does a runtime check. Devtools' own consumer code correctly uses `import.meta.env`, but if anyone adds a new dependency that reads `process.env` at runtime, it'll silently get `{}`. Comment-on-line in a future cleanup.
-- **PR-merge path now exercised.** PRs #68, #69, and #70 went through the full PR review and merge cycle, so the deploy workflows are validated for that path.
-
-### Stale references
-
-- **Web target.** `app.json` references `favicon.png` and there's a Web tab in some Expo configs, but Crowd has no web app. Worth either deleting the web target entirely or treating it as latent. Not blocking anything.
 - **Bundle size in devtools.** 578KB raw / 142KB gzipped. Acceptable for dev tooling; if it grows further, code-splitting via dynamic `import()` is the path.
 
 ---
