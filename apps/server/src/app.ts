@@ -770,9 +770,14 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         crowdFilter = isNull(messages.crowdId);
       }
 
+      // Distance gates visibility on the global (Everyone) feed only. A
+      // crowd-scoped feed returns every non-expired post in the crowd
+      // regardless of distance — membership is the access control there, not
+      // proximity. effectiveDistance is still computed and returned so the
+      // PostCard label and the Nearest sort keep working in both scopes.
       const whereClause = and(
         gt(messages.expiresAt, new Date()),
-        sql`${effectiveDistance} <= ${messages.radiusMeters}`,
+        crowdId ? undefined : sql`${effectiveDistance} <= ${messages.radiusMeters}`,
         crowdFilter
       );
 
