@@ -4,7 +4,7 @@ The working backlog of what's pending. Lean by design — when items ship, they 
 
 For working principles, historical decisions, and lessons from completed work, see `docs/decisions.md`.
 
-Last updated: late-May 2026 (You tab and Clear my data shipped; accuracy-threshold defense investigated and set aside; TS 6 bump deferred to SDK 55, forward-compatible tsconfig migrations split out to PR #101).
+Last updated: early-June 2026 (You tab and Clear my data shipped; accuracy-threshold defense investigated and set aside; TS 6 bump deferred to SDK 55, forward-compatible tsconfig migrations split out to PR #101).
 
 ---
 
@@ -97,6 +97,8 @@ Background: `docs/decisions.md` → QR scan modal-stacking saga.
 - **`refreshLocation` cleanup for consistency.** The existing `refreshLocation` on `useLocation` still calls `requestForegroundPermissionsAsync` on every invocation (re-prompts every time). It's no longer on the hot path (replaced by `getFreshLocation` for action-time use), but worth collapsing to use the same `getFreshLocation` semantics (read permission first, request only when missing) for consistency. Small future cleanup.
 - **Empty-text guard in CreateMessageScreen.** The `onSubmit` handler short-circuits with a toast when the trimmed text is empty, before the API client's pre-parse runs. This means the empty-message case (the most realistic trigger for inline field-level rendering) never exercises the ValidationError path that now exists. If inline rendering is wanted for empty submissions, remove the early-return guard — the field-level plumbing already handles it. Small UX decision (generic toast vs. inline error for the empty case); flagged as a tiny optional cleanup, not blocking.
 - **Background location strategy.** Independent of the stale-location fix: do we ever want the app to refresh location in the background, or on app-resume via `AppState` listeners? If yes, separate design conversation about battery, permissions, iOS background modes. The on-demand fresh fetch at action time covers the immediate need; background tracking is a future optimization with real costs.
+- **RelayButton `loading` prop is inert.** `FeedScreen.performRelay` does not pass per-message pending state to the chip, so the in-flight dim never fires in production. To activate, thread the boost mutation's pending state from FeedScreen down to the corresponding RelayButton via the new optional `loading` prop. Small change, no design work needed.
+- **RelayButton chip border is 0.5px.** May render too faintly on some lower-density Android screens. When Android scope opens, verify the chip is visible at native density; if not, switch to `StyleSheet.hairlineWidth` or 1px. One of several Android-readiness checks for the chip surface.
 
 ### Repo hygiene observations
 
