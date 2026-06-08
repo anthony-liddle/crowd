@@ -17,6 +17,18 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # SDK-managed packages: these move when the Expo SDK upgrades (via
+    # `expo install`), not via Dependabot. Bumping them ahead of the SDK pin
+    # fails the `expo install --check` CI gate, so exclude them entirely.
+    ignore:
+      - dependency-name: "react"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
+      - dependency-name: "@react-native-community/*"
+      - dependency-name: "@react-native-picker/picker"
+      - dependency-name: "nativewind"
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
