@@ -1,0 +1,142 @@
+---
+import Base from '../layouts/Base.astro';
+
+const title = 'Privacy Policy · Crowd';
+const description =
+  "Crowd is built to forget. It collects as little as possible, keeps it for as short a time as possible, and shares it with no one. Here's exactly what that means.";
+---
+
+<Base title={title} description={description}>
+  <article class="prose">
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: June 8, 2026</p>
+
+    <p class="intro">
+      Crowd is built to forget. It collects as little as possible, keeps it for
+      as short a time as possible, and shares it with no one. This page explains
+      exactly what that means.
+    </p>
+
+    <h2>What we collect</h2>
+    <p>Two things, and only while you use the app:</p>
+    <ul>
+      <li>
+        <strong>Your location</strong>, when you grant permission. Crowd uses
+        your device's foreground location, only while the app is open.
+      </li>
+      <li>
+        <strong>An anonymous identity token</strong>, generated on your device.
+        It's a random value, not tied to your name, email, phone number, or any
+        account, because Crowd has no accounts.
+      </li>
+    </ul>
+
+    <h2>How we use it</h2>
+    <p>
+      Your location filters your feed: it shows posts within the reach you choose
+      and labels how far away each one is. It is never kept as a history or a
+      trail.
+    </p>
+    <p>
+      Your identity token associates the posts and relays you create with your
+      device, so the app knows which posts are yours, for as long as those posts
+      exist.
+    </p>
+
+    <h2>Where it's stored</h2>
+    <p>
+      Your identity token lives on your device, in iOS Secure Storage. Posts and
+      their metadata (text, location, and lifespan) live on Crowd's servers
+      only until they expire.
+    </p>
+
+    <h2>How long we keep it</h2>
+    <p>Everything is temporary by design:</p>
+    <ul>
+      <li>
+        <strong>Posts</strong> are deleted automatically when the lifespan you
+        set expires.
+      </li>
+      <li>
+        <strong>Your identity</strong> rotates: it's replaced with a new one
+        once your last active post expires, so your activity can't be linked
+        across time.
+      </li>
+      <li>
+        <strong>Crowds</strong> expire after 24 hours. When a crowd ends,
+        everything in it is deleted.
+      </li>
+    </ul>
+
+    <h2>Who we share it with</h2>
+    <p>
+      No one. Crowd does not sell, rent, or share your data with any third party.
+      There are no analytics, no advertising SDKs, and no tracking services
+      anywhere in the app.
+    </p>
+
+    <h2>Your choices</h2>
+    <p>
+      You can clear all of your data at any time from the <strong>You</strong>
+      tab. This deletes your posts from our servers and resets your device
+      identity. There's nothing to log into and nothing to unsubscribe from.
+    </p>
+
+    <h2>Children</h2>
+    <p>Crowd is intended for people 17 and older.</p>
+
+    <h2>Contact</h2>
+    <p>
+      Questions about privacy? Email us at
+      <a href="mailto:hello@joincrowd.app">hello@joincrowd.app</a>.
+    </p>
+  </article>
+</Base>
+
+<style>
+  .prose {
+    max-width: 36rem;
+  }
+
+  .prose h1 {
+    margin: 0 0 0.25rem;
+    font-size: clamp(1.875rem, 5vw, 2.25rem);
+  }
+
+  .updated {
+    margin: 0 0 2rem;
+    color: var(--dust);
+    font-size: 0.875rem;
+  }
+
+  .intro {
+    margin: 0 0 2.25rem;
+    font-size: 1.125rem;
+    color: var(--ink-2);
+  }
+
+  .prose h2 {
+    margin: 2.25rem 0 0.625rem;
+    font-size: 1.1875rem;
+  }
+
+  .prose p {
+    margin: 0 0 1rem;
+    color: var(--ink-2);
+  }
+
+  .prose ul {
+    margin: 0 0 1rem;
+    padding-left: 1.25rem;
+    color: var(--ink-2);
+  }
+
+  .prose li {
+    margin-bottom: 0.5rem;
+  }
+
+  .prose strong {
+    font-weight: 500;
+    color: var(--ink);
+  }
+</style>
