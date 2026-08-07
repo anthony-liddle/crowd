@@ -31,6 +31,9 @@ updates:
       - dependency-name: "expo"
       - dependency-name: "expo-*"
       - dependency-name: "jest-expo"
+      # Coupled to the SDK-pinned react-native-svg: newer @types/react break its
+      # class component types (149 tsc errors on 19.2.18 with svg 15.15.3).
+      - dependency-name: "@types/react"
 
   - package-ecosystem: "github-actions"
     directory: "/"
