@@ -26,9 +26,11 @@ updates:
       - dependency-name: "react-native-*"
       - dependency-name: "@react-native-community/*"
       - dependency-name: "@react-native-picker/picker"
+      - dependency-name: "@react-native-async-storage/*"
       - dependency-name: "nativewind"
       - dependency-name: "expo"
       - dependency-name: "expo-*"
+      - dependency-name: "jest-expo"
 
   - package-ecosystem: "github-actions"
     directory: "/"
