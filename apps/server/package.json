@@ -19,27 +19,27 @@
     "test:integration": "vitest run __tests__/integration"
   },
   "dependencies": {
-    "@fastify/cors": "^11.0.0",
+    "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^10.3.0",
     "@repo/shared": "workspace:*",
     "drizzle-orm": "^0.45.2",
-    "fastify": "^5.8.5",
-    "pg": "^8.20.0",
-    "zod": "^4.0.0"
+    "fastify": "^5.11.2",
+    "pg": "^8.22.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^11.14.0",
-    "@types/node": "^25.9.2",
-    "@types/pg": "^8.20.0",
+    "@types/node": "^25.9.5",
+    "@types/pg": "^8.20.4",
     "@types/uuid": "^11.0.0",
-    "@vitest/coverage-v8": "^4.1.8",
-    "@vitest/ui": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/ui": "^4.1.10",
     "drizzle-kit": "^0.31.10",
     "pino": "^10.3.1",
     "testcontainers": "^11.14.0",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.11",
     "typescript": "^5.9.3",
-    "uuid": "^14.0.0",
-    "vitest": "^4.1.8"
+    "uuid": "^14.0.1",
+    "vitest": "^4.1.10"
   }
 }
