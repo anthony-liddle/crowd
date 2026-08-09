@@ -38,6 +38,15 @@ updates:
       # Coupled to the SDK-pinned react-native-svg: newer @types/react break its
       # class component types (149 tsc errors on 19.2.18 with svg 15.15.3).
       - dependency-name: "@types/react"
+      # Pinned by the React Native / Expo toolchain, not by us:
+      #   jest, @types/jest - jest-expo 55 and 56 both depend on babel-jest
+      #     and @jest/globals at ^29.2.1, so jest 30 is not viable until
+      #     jest-expo itself moves. An SDK upgrade alone does not unblock it.
+      #   @babel/core - Metro and react-native pin the Babel 7 line.
+      # Revisit these when the SDK upgrade that carries them lands.
+      - dependency-name: "jest"
+      - dependency-name: "@types/jest"
+      - dependency-name: "@babel/core"
 
   - package-ecosystem: "github-actions"
     directory: "/"
