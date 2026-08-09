@@ -22,6 +22,10 @@ updates:
     # fails the `expo install --check` CI gate, so exclude them entirely.
     ignore:
       - dependency-name: "react"
+      # Must stay paired with react: react-dom declares a peer of the exact
+      # matching react version, and react itself is ignored above, so an
+      # unpaired react-dom bump always produces an unmet peer (see #150).
+      - dependency-name: "react-dom"
       - dependency-name: "react-native"
       - dependency-name: "react-native-*"
       - dependency-name: "@react-native-community/*"
