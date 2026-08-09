@@ -78,7 +78,7 @@ jobs:
           GH_TOKEN: ${{ secrets.EXPO_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          BRANCH=chore/expo-sdk-sync
+          BRANCH=test/expo-sync-e2e-pr   # E2E TEST ONLY
 
           # Package diff, used only as PR body content. Written to a file
           # rather than an output variable so no delimiter can be forged.
@@ -122,7 +122,7 @@ jobs:
           if gh pr view "$BRANCH" --json state --jq .state 2>/dev/null | grep -q OPEN; then
             gh pr edit "$BRANCH" --body-file /tmp/pr-body.md
           else
-            gh pr create --base main --head "$BRANCH" \
+            gh pr create --base test/expo-sync-e2e --head "$BRANCH" \
               --title "chore(mobile): sync SDK-managed packages to Expo expected versions" \
               --body-file /tmp/pr-body.md \
               --label dependencies
