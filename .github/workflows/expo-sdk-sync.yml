@@ -25,7 +25,14 @@ jobs:
     name: Sync Expo SDK-managed packages
     runs-on: ubuntu-latest
     steps:
+      # The token must be given to checkout, not only to the gh CLI. checkout
+      # persists its credentials for subsequent git commands, so without this
+      # the branch push is authored by github-actions[bot] and GitHub will not
+      # run workflows for the resulting PR - which is the whole reason
+      # EXPO_SYNC_TOKEN exists.
       - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.EXPO_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
