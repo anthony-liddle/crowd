@@ -231,12 +231,6 @@ importers:
       jest-expo:
         specifier: 55.0.20
         version: 55.0.20(@babel/core@7.29.7)(expo@55.0.28)(jest@29.7.0(@types/node@26.2.0))(react-native@0.83.10(@babel/core@7.29.7)(@react-native-community/cli@13.6.9)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
-      metro-minify-terser:
-        specifier: ^0.84.4
-        version: 0.84.4
-      metro-runtime:
-        specifier: ^0.84.4
-        version: 0.84.4
       tailwindcss:
         specifier: 3.4.19
         version: 3.4.19(tsx@4.23.11)(yaml@2.9.0)
@@ -9785,7 +9779,7 @@ snapshots:
     dependencies:
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 26.2.0
+      '@types/node': 25.9.5
       '@types/yargs': 15.0.20
       chalk: 4.1.2
     optional: true
@@ -13879,6 +13873,7 @@ snapshots:
     dependencies:
       flow-enums-runtime: 0.0.6
       terser: 5.49.2
+    optional: true
 
   metro-resolver@0.83.7:
     dependencies:
@@ -13898,6 +13893,7 @@ snapshots:
     dependencies:
       '@babel/runtime': 7.29.7
       flow-enums-runtime: 0.0.6
+    optional: true
 
   metro-source-map@0.83.7:
     dependencies:
