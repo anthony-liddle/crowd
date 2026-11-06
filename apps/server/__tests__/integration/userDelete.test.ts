@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { FastifyInstance } from 'fastify';
 import { setupTestDb, teardownTestDb, clearTables, getTestDb } from '../helpers/testDb';
 import { buildApp } from '../../src/app';
+import { MessageResponseSchema } from '@repo/shared';
 import { validMessage, validBoost, validCrowd, portlandLocation, randomUuid } from '../helpers/fixtures';
 
 // POST /users/delete contract tests. The load-bearing behavior is the
@@ -105,6 +106,27 @@ describe('User Data Delete API', () => {
     expect(feed[0].boostCount).toBe(1);
     expect(feed[0].isBoosted).toBe(true);
     expect(feed[0].ownerId).toBeUndefined();
+  });
+
+  it('returns isOwner false (not null) on an anonymized message, so the feed still parses for clients', async () => {
+    const ownerId = randomUuid();
+    const boosterId = randomUuid();
+    const messageId = await postMessage(ownerId);
+    await boost(messageId, boosterId);
+    await wipe([ownerId]);
+
+    // The anonymized row has owner_id NULL. The viewer's ownership check
+    // must still be a real boolean: clients validate the feed as an array,
+    // so a single null isOwner rejects the whole response.
+    const feedResponse = await app.inject({
+      method: 'GET',
+      url: `/messages/feed?latitude=${portlandLocation.latitude}&longitude=${portlandLocation.longitude}&userId=${randomUuid()}`,
+    });
+    const feed = feedResponse.json();
+    expect(feed.length).toBe(1);
+    expect(feed[0].id).toBe(messageId);
+    expect(feed[0].isOwner).toBe(false);
+    expect(MessageResponseSchema.array().safeParse(feed).success).toBe(true);
   });
 
   it('deletes boosts issued by the wiping user and decrements the parent message\'s boostCount', async () => {

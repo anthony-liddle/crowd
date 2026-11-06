@@ -290,7 +290,6 @@ describe('MessageResponseSchema', () => {
     const result = MessageResponseSchema.safeParse({
       ...validResponse,
       distance: 500.5,
-      ownerId: '123e4567-e89b-12d3-a456-426614174000',
       isBoosted: true,
       isOwner: true,
       crowdId: '223e4567-e89b-12d3-a456-426614174001',
@@ -300,6 +299,19 @@ describe('MessageResponseSchema', () => {
       expect(result.data.distance).toBe(500.5);
       expect(result.data.isBoosted).toBe(true);
       expect(result.data.isOwner).toBe(true);
+    }
+  });
+
+  // Owner identity is not part of the feed contract. If a server ever sends
+  // it, the parsed message must not carry it into the client.
+  it('should strip ownerId from a parsed message', () => {
+    const result = MessageResponseSchema.safeParse({
+      ...validResponse,
+      ownerId: '123e4567-e89b-12d3-a456-426614174000',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty('ownerId');
     }
   });
 
