@@ -25,7 +25,7 @@
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.11.2",
     "pg": "^8.22.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^11.14.0",
