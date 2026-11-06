@@ -16,7 +16,6 @@ export const mockMessage = {
   activeMinutes: 60,
   createdAt: '2024-01-15T10:00:00.000Z',
   expiresAt: '2024-01-15T11:00:00.000Z',
-  ownerId: mockUserId,
   boostCount: 5,
   isBoosted: false,
   isOwner: false,

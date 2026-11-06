@@ -16,6 +16,7 @@ import {
   JoinWithTokenSchema,
   LookupTokenSchema,
   DeleteUserDataSchema,
+  type MessageResponse,
 } from '@repo/shared';
 import { db as defaultDb } from './db/index';
 import { messages, messageBoosts, crowds, crowdMemberships, proximityTokens } from './db/schema';
@@ -790,12 +791,17 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         activeMinutes: messages.activeMinutes,
         createdAt: messages.createdAt,
         expiresAt: messages.expiresAt,
-        ownerId: messages.ownerId,
         boostCount: messages.boostCount,
         crowdId: messages.crowdId,
         distance: effectiveDistance,
         isBoosted: isBoostedSql,
-        isOwner: userId ? sql<boolean>`${messages.ownerId} = ${userId}` : sql<boolean>`false`,
+        // Ownership is answered here, against the requester's own ID, so the
+        // response never carries anyone's owner ID. coalesce because an
+        // anonymized post has owner_id NULL, and NULL = <uuid> is NULL, which
+        // clients reject as a non-boolean.
+        isOwner: userId
+          ? sql<boolean>`coalesce(${messages.ownerId} = ${userId}, false)`
+          : sql<boolean>`false`,
       })
         .from(messages)
         .where(whereClause);
@@ -809,13 +815,22 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         .limit(parsed.limit)
         .offset(parsed.offset);
 
-      // Map to DTO
-      return nearbyMessages.map(msg => ({
-        ...msg,
+      // Explicit allowlist, typed against the shared response contract: only
+      // these fields reach the client. A column added to the select above
+      // stays private unless it is deliberately listed here too.
+      return nearbyMessages.map((msg): MessageResponse => ({
+        id: msg.id,
+        text: msg.text,
         latitude: parseFloat(msg.latitude),
         longitude: parseFloat(msg.longitude),
+        radiusMeters: msg.radiusMeters,
+        activeMinutes: msg.activeMinutes,
+        createdAt: msg.createdAt,
+        expiresAt: msg.expiresAt,
         distance: msg.distance,
-        ownerId: msg.ownerId || undefined, // handle null
+        boostCount: msg.boostCount,
+        isBoosted: msg.isBoosted,
+        isOwner: msg.isOwner,
         crowdId: msg.crowdId || undefined,
       }));
     } catch (err: any) {

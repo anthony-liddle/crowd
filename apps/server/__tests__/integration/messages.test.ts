@@ -389,28 +389,87 @@ describe('Messages API', () => {
       expect(otherFeed[0].isBoosted).toBe(false);
     });
 
-    it('should include isOwner flag for user', async () => {
-      const ownerId = randomUuid();
+    it('should include isOwner flag for user without exposing owner IDs', async () => {
+      const userA = randomUuid();
+      const userB = randomUuid();
 
       await app.inject({
         method: 'POST',
         url: '/messages',
-        payload: validMessage({ userId: ownerId, radiusMeters: 5000 }),
+        payload: validMessage({ userId: userA, text: 'from A', radiusMeters: 5000 }),
+      });
+      await app.inject({
+        method: 'POST',
+        url: '/messages',
+        payload: validMessage({ userId: userB, text: 'from B', radiusMeters: 5000 }),
       });
 
-      // Check as owner
-      const ownerFeedResponse = await app.inject({
+      // A's view: own post flagged, B's post not, and no owner identity
+      // anywhere in the payload. The global ID links every live post a
+      // person has, so B's ID must never reach A.
+      const feedResponse = await app.inject({
         method: 'GET',
-        url: `/messages/feed?latitude=${portlandLocation.latitude}&longitude=${portlandLocation.longitude}&userId=${ownerId}`,
+        url: `/messages/feed?latitude=${portlandLocation.latitude}&longitude=${portlandLocation.longitude}&userId=${userA}`,
       });
-      expect(ownerFeedResponse.json()[0].isOwner).toBe(true);
+      const feed = feedResponse.json();
+      expect(feed.length).toBe(2);
+      expect(feed.find((m: { text: string }) => m.text === 'from A').isOwner).toBe(true);
+      expect(feed.find((m: { text: string }) => m.text === 'from B').isOwner).toBe(false);
+      for (const message of feed) {
+        expect(message).not.toHaveProperty('ownerId');
+      }
+      expect(feedResponse.body).not.toContain(userB);
 
-      // Check as other user
+      // A third user owns nothing in this feed.
       const otherFeedResponse = await app.inject({
         method: 'GET',
         url: `/messages/feed?latitude=${portlandLocation.latitude}&longitude=${portlandLocation.longitude}&userId=${randomUuid()}`,
       });
-      expect(otherFeedResponse.json()[0].isOwner).toBe(false);
+      for (const message of otherFeedResponse.json()) {
+        expect(message.isOwner).toBe(false);
+      }
+    });
+
+    it('should not expose other members\' crowd-specific owner IDs in a crowd feed', async () => {
+      const memberA = randomUuid();
+      const memberB = randomUuid();
+
+      const crowdResponse = await app.inject({
+        method: 'POST',
+        url: '/crowds',
+        payload: { name: 'Test Crowd', crowdUserId: memberA, isOpen: true },
+      });
+      const crowdId = crowdResponse.json().id;
+      await app.inject({
+        method: 'POST',
+        url: `/crowds/${crowdId}/join`,
+        payload: { crowdUserId: memberB },
+      });
+
+      await app.inject({
+        method: 'POST',
+        url: '/messages',
+        payload: validMessage({ userId: memberA, crowdId, text: 'from A', radiusMeters: 5000 }),
+      });
+      await app.inject({
+        method: 'POST',
+        url: '/messages',
+        payload: validMessage({ userId: memberB, crowdId, text: 'from B', radiusMeters: 5000 }),
+      });
+
+      const feedResponse = await app.inject({
+        method: 'GET',
+        url: `/messages/feed?latitude=${portlandLocation.latitude}&longitude=${portlandLocation.longitude}&userId=${memberA}&crowdId=${crowdId}`,
+      });
+      expect(feedResponse.statusCode).toBe(200);
+      const feed = feedResponse.json();
+      expect(feed.length).toBe(2);
+      expect(feed.find((m: { text: string }) => m.text === 'from A').isOwner).toBe(true);
+      expect(feed.find((m: { text: string }) => m.text === 'from B').isOwner).toBe(false);
+      for (const message of feed) {
+        expect(message).not.toHaveProperty('ownerId');
+      }
+      expect(feedResponse.body).not.toContain(memberB);
     });
 
     it('should return only global messages when no crowdId specified', async () => {

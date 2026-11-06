@@ -30,7 +30,6 @@ export const MessageSchema = z.object({
   createdAt: z.date(),
   expiresAt: z.date(),
   distance: z.number().optional(), // distance from query point in meters
-  ownerId: z.string().uuid().optional(),
   boostCount: z.number().int().default(0),
   isBoosted: z.boolean().default(false),
   isOwner: z.boolean().default(false),
@@ -151,9 +150,10 @@ export const MessageResponseSchema = z.object({
   createdAt: z.coerce.date(),
   expiresAt: z.coerce.date(),
   distance: z.number().optional(),
-  ownerId: z.string().uuid().optional(),
   boostCount: z.number().int().default(0),
   isBoosted: z.boolean().default(false),
+  // Server-computed against the requester's own ID. Owner identity itself is
+  // deliberately not part of this contract (z.object strips it if sent).
   isOwner: z.boolean().default(false),
   crowdId: z.string().uuid().nullable().optional(),
 });
