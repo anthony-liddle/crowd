@@ -20,6 +20,7 @@ import {
 } from '@repo/shared';
 import { db as defaultDb } from './db/index';
 import { messages, messageBoosts, crowds, crowdMemberships, proximityTokens } from './db/schema';
+import { sendDomainError } from './domainErrors';
 import { sql, asc, gt, and, eq, or, inArray, count, isNull } from 'drizzle-orm';
 
 // 24 hours in milliseconds for crowd expiration
@@ -237,13 +238,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
       const [crowd] = await db.select().from(crowds).where(eq(crowds.id, crowdId));
       if (!crowd) {
-        return reply.status(404).send({ error: 'Crowd not found' });
+        return sendDomainError(reply, 'CROWD_NOT_FOUND');
       }
       if (crowd.expiresAt < new Date()) {
-        return reply.status(400).send({ error: 'Crowd expired' });
+        return sendDomainError(reply, 'CROWD_EXPIRED');
       }
       if (!crowd.isOpen) {
-        return reply.status(400).send({ error: 'Crowd is closed' });
+        return sendDomainError(reply, 'CROWD_CLOSED');
       }
 
       const [existing] = await db.select().from(crowdMemberships).where(and(
@@ -251,7 +252,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         eq(crowdMemberships.userId, body.crowdUserId),
       ));
       if (existing) {
-        return reply.status(400).send({ error: 'Already a member' });
+        return sendDomainError(reply, 'ALREADY_MEMBER');
       }
 
       await db.insert(crowdMemberships).values({
@@ -280,13 +281,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
       const [crowd] = await db.select().from(crowds).where(eq(crowds.id, crowdId));
       if (!crowd) {
-        return reply.status(404).send({ error: 'Crowd not found' });
+        return sendDomainError(reply, 'CROWD_NOT_FOUND');
       }
       if (crowd.expiresAt < new Date()) {
-        return reply.status(400).send({ error: 'Crowd expired' });
+        return sendDomainError(reply, 'CROWD_EXPIRED');
       }
       if (crowd.ownerId !== body.crowdUserId) {
-        return reply.status(403).send({ error: 'Only the owner can generate join codes' });
+        return sendDomainError(reply, 'NOT_OWNER');
       }
 
       const token = randomBytes(32).toString('base64url');
@@ -320,21 +321,21 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
       const [tokenRow] = await db.select().from(proximityTokens).where(eq(proximityTokens.token, body.token));
       if (!tokenRow) {
-        return reply.status(404).send({ error: 'Invalid token' });
+        return sendDomainError(reply, 'INVITE_TOKEN_NOT_FOUND');
       }
       if (tokenRow.usedAt !== null) {
-        return reply.status(400).send({ error: 'Token already used' });
+        return sendDomainError(reply, 'INVITE_TOKEN_USED');
       }
       if (tokenRow.expiresAt < new Date()) {
-        return reply.status(400).send({ error: 'Token expired' });
+        return sendDomainError(reply, 'INVITE_TOKEN_EXPIRED');
       }
 
       const [crowd] = await db.select().from(crowds).where(eq(crowds.id, tokenRow.crowdId));
       if (!crowd) {
-        return reply.status(404).send({ error: 'Crowd not found' });
+        return sendDomainError(reply, 'CROWD_NOT_FOUND');
       }
       if (crowd.expiresAt < new Date()) {
-        return reply.status(400).send({ error: 'Crowd expired' });
+        return sendDomainError(reply, 'CROWD_EXPIRED');
       }
 
       const [memberCountResult] = await db
@@ -370,21 +371,21 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
       const [tokenRow] = await db.select().from(proximityTokens).where(eq(proximityTokens.token, body.token));
       if (!tokenRow) {
-        return reply.status(404).send({ error: 'Invalid token' });
+        return sendDomainError(reply, 'INVITE_TOKEN_NOT_FOUND');
       }
       if (tokenRow.usedAt !== null) {
-        return reply.status(400).send({ error: 'Token already used' });
+        return sendDomainError(reply, 'INVITE_TOKEN_USED');
       }
       if (tokenRow.expiresAt < new Date()) {
-        return reply.status(400).send({ error: 'Token expired' });
+        return sendDomainError(reply, 'INVITE_TOKEN_EXPIRED');
       }
 
       const [crowd] = await db.select().from(crowds).where(eq(crowds.id, tokenRow.crowdId));
       if (!crowd) {
-        return reply.status(404).send({ error: 'Crowd not found' });
+        return sendDomainError(reply, 'CROWD_NOT_FOUND');
       }
       if (crowd.expiresAt < new Date()) {
-        return reply.status(400).send({ error: 'Crowd expired' });
+        return sendDomainError(reply, 'CROWD_EXPIRED');
       }
 
       const [existing] = await db.select().from(crowdMemberships).where(and(
@@ -584,10 +585,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       if (body.crowdId) {
         const [crowd] = await db.select().from(crowds).where(eq(crowds.id, body.crowdId));
         if (!crowd) {
-          return reply.status(404).send({ error: 'Crowd not found' });
+          return sendDomainError(reply, 'CROWD_NOT_FOUND');
         }
         if (crowd.expiresAt < new Date()) {
-          return reply.status(400).send({ error: 'Crowd expired' });
+          return sendDomainError(reply, 'CROWD_EXPIRED');
         }
 
         const [membership] = await db.select().from(crowdMemberships).where(and(
@@ -595,7 +596,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
           eq(crowdMemberships.userId, body.userId)
         ));
         if (!membership) {
-          return reply.status(403).send({ error: 'Not a member of this crowd' });
+          return sendDomainError(reply, 'NOT_MEMBER');
         }
       }
 
@@ -646,15 +647,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       // 1. Fetch message to check ownership and existence
       const [message] = await db.select().from(messages).where(eq(messages.id, id));
       if (!message) {
-        return reply.status(404).send({ error: 'Message not found' });
+        return sendDomainError(reply, 'POST_NOT_FOUND');
       }
 
       // 2. Check rules
       if (message.expiresAt < new Date()) {
-        return reply.status(400).send({ error: 'Message expired' });
+        return sendDomainError(reply, 'POST_EXPIRED');
       }
       if (message.ownerId === body.userId) {
-        return reply.status(400).send({ error: 'Cannot boost your own message' });
+        return sendDomainError(reply, 'OWN_POST');
       }
 
       // 3. Check if already boosted
@@ -666,7 +667,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         ));
 
       if (existingBoost) {
-        return reply.status(400).send({ error: 'Already boosted' });
+        return sendDomainError(reply, 'ALREADY_RELAYED');
       }
 
       // 4. Boost
@@ -716,15 +717,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       // without one has no member to check and is refused like a non-member.
       if (crowdId) {
         if (!userId) {
-          return reply.status(403).send({ error: 'Not a member of this crowd' });
+          return sendDomainError(reply, 'NOT_MEMBER');
         }
 
         const [crowd] = await db.select().from(crowds).where(eq(crowds.id, crowdId));
         if (!crowd) {
-          return reply.status(404).send({ error: 'Crowd not found' });
+          return sendDomainError(reply, 'CROWD_NOT_FOUND');
         }
         if (crowd.expiresAt < new Date()) {
-          return reply.status(400).send({ error: 'Crowd expired' });
+          return sendDomainError(reply, 'CROWD_EXPIRED');
         }
 
         const [membership] = await db.select().from(crowdMemberships).where(and(
@@ -732,7 +733,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
           eq(crowdMemberships.userId, userId)
         ));
         if (!membership) {
-          return reply.status(403).send({ error: 'Not a member of this crowd' });
+          return sendDomainError(reply, 'NOT_MEMBER');
         }
       }
 
