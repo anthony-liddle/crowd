@@ -541,6 +541,95 @@ describe('Messages API', () => {
       expect(feed.length).toBe(1);
       expect(feed[0].text).toBe('Crowd message');
     });
+
+    describe('crowd access', () => {
+      const feedUrl = (query: string) =>
+        `/messages/feed?latitude=${portlandLocation.latitude}&longitude=${portlandLocation.longitude}${query}`;
+
+      // A private crowd with one post in it, and a member who joined with an
+      // invite code (so membership, not ownership, is what lets them read).
+      async function privateCrowdWithPost() {
+        const ownerId = randomUuid();
+        const crowdResponse = await app.inject({
+          method: 'POST',
+          url: '/crowds',
+          payload: { name: 'Private Crowd', crowdUserId: ownerId, isOpen: false },
+        });
+        const crowdId: string = crowdResponse.json().id;
+
+        const tokenResponse = await app.inject({
+          method: 'POST',
+          url: `/crowds/${crowdId}/proximity-token`,
+          payload: { crowdUserId: ownerId },
+        });
+        const memberId = randomUuid();
+        const joinResponse = await app.inject({
+          method: 'POST',
+          url: '/crowds/join-with-token',
+          payload: { token: tokenResponse.json().token, crowdUserId: memberId },
+        });
+        expect(joinResponse.statusCode).toBe(200);
+
+        const postResponse = await app.inject({
+          method: 'POST',
+          url: '/messages',
+          payload: validMessage({ userId: ownerId, crowdId, text: 'Members only', radiusMeters: 5000 }),
+        });
+        expect(postResponse.statusCode).toBe(200);
+
+        return { crowdId, memberId };
+      }
+
+      it('refuses a crowd feed request without a userId', async () => {
+        const { crowdId } = await privateCrowdWithPost();
+
+        const response = await app.inject({ method: 'GET', url: feedUrl(`&crowdId=${crowdId}`) });
+
+        expect(response.statusCode).toBe(403);
+        expect(response.json()).toEqual({ error: 'Not a member of this crowd' });
+      });
+
+      it('refuses a crowd feed request from a non-member', async () => {
+        const { crowdId } = await privateCrowdWithPost();
+
+        const response = await app.inject({
+          method: 'GET',
+          url: feedUrl(`&userId=${randomUuid()}&crowdId=${crowdId}`),
+        });
+
+        expect(response.statusCode).toBe(403);
+        expect(response.json()).toEqual({ error: 'Not a member of this crowd' });
+      });
+
+      it('returns the crowd\'s posts to a member', async () => {
+        const { crowdId, memberId } = await privateCrowdWithPost();
+
+        const response = await app.inject({
+          method: 'GET',
+          url: feedUrl(`&userId=${memberId}&crowdId=${crowdId}`),
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().map((m: { text: string }) => m.text)).toEqual(['Members only']);
+      });
+
+      it('still serves the Everyone feed without a userId', async () => {
+        await privateCrowdWithPost();
+        await app.inject({
+          method: 'POST',
+          url: '/messages',
+          payload: validMessage({ text: 'Everyone post', radiusMeters: 5000 }),
+        });
+
+        const response = await app.inject({ method: 'GET', url: feedUrl('') });
+
+        expect(response.statusCode).toBe(200);
+        const feed = response.json();
+        expect(feed.map((m: { text: string }) => m.text)).toEqual(['Everyone post']);
+        expect(feed[0].isOwner).toBe(false);
+        expect(feed[0].isBoosted).toBe(false);
+      });
+    });
   });
 
   describe('POST /messages/:id/boost', () => {

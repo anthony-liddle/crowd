@@ -711,8 +711,14 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       const userId = parsed.userId;
       const crowdId = parsed.crowdId;
 
-      // If crowdId is specified, verify membership
-      if (crowdId && userId) {
+      // A crowd's feed is for its members. The Everyone feed (no crowdId)
+      // has no membership, so userId stays optional there; a crowd request
+      // without one has no member to check and is refused like a non-member.
+      if (crowdId) {
+        if (!userId) {
+          return reply.status(403).send({ error: 'Not a member of this crowd' });
+        }
+
         const [crowd] = await db.select().from(crowds).where(eq(crowds.id, crowdId));
         if (!crowd) {
           return reply.status(404).send({ error: 'Crowd not found' });
