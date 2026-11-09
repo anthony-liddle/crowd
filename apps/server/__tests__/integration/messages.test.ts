@@ -586,7 +586,7 @@ describe('Messages API', () => {
         const response = await app.inject({ method: 'GET', url: feedUrl(`&crowdId=${crowdId}`) });
 
         expect(response.statusCode).toBe(403);
-        expect(response.json()).toEqual({ error: 'Not a member of this crowd' });
+        expect(response.json()).toEqual({ error: 'Not a member of this crowd', code: 'NOT_MEMBER' });
       });
 
       it('refuses a crowd feed request from a non-member', async () => {
@@ -598,7 +598,7 @@ describe('Messages API', () => {
         });
 
         expect(response.statusCode).toBe(403);
-        expect(response.json()).toEqual({ error: 'Not a member of this crowd' });
+        expect(response.json()).toEqual({ error: 'Not a member of this crowd', code: 'NOT_MEMBER' });
       });
 
       it('returns the crowd\'s posts to a member', async () => {
