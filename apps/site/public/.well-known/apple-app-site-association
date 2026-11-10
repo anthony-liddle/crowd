@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["9ML46U556H.dev.anthonyliddle.crowd"],
+        "components": [
+          { "/": "/join/*", "comment": "An open crowd's invite" },
+          { "/": "/join-token/*", "comment": "A private crowd's single-use invite code" }
+        ]
+      }
+    ]
+  }
+}
