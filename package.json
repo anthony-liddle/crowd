@@ -33,6 +33,9 @@
     "typescript": "^5.9.3"
   },
   "pnpm": {
+    "overrides": {
+      "shell-quote@<1.12.0": "1.12.0"
+    },
     "packageExtensions": {
       "@react-native-community/slider": {
         "peerDependencies": {
